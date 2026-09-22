@@ -1,3 +1,5 @@
+//test
+
 use std::{env, fs};
 extern crate embed_resource;
 extern crate toml;
