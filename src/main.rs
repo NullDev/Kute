@@ -17,6 +17,8 @@ pub mod modules {
     pub mod accounts;
     #[cfg(feature = "audio-log")]
     pub mod audio_log;
+    #[cfg(feature = "audio-log")]
+    pub mod audio_trace;
     pub mod bench;
     pub mod blocklist;
     pub mod dev;

@@ -299,6 +299,8 @@ pub fn attach_browser(browser: &Browser) {
             return;
         }
         modules::input::attach(hwnd);
+        #[cfg(feature = "audio-log")]
+        modules::audio_trace::load(browser);
         modules::priority::set(config("webviewPriority", "Normal".to_string()));
         if config("realPing", false) {
             modules::ping::load(browser);
@@ -372,6 +374,7 @@ pub fn handle_accelerator_key(browser: &Browser, key: u16) {
         #[cfg(feature = "audio-log")]
         VK_F9 => {
             modules::audio_log::mark();
+            modules::audio_trace::capture(browser, "F9");
             bridge::post_json(browser, "{\"audioMark\":true}");
         }
         VK_F5 => {

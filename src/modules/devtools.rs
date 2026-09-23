@@ -9,6 +9,14 @@ fn call(browser: &Browser, method: &str, params: Option<DictionaryValue>) {
     host.execute_dev_tools_method(NEXT_ID.fetch_add(1, Ordering::Relaxed), Some(&CefString::from(method)), params.as_mut());
 }
 
+// raw CDP message, for the commands whose parameters are more than a flat dictionary (the audio trace)
+#[cfg(feature = "audio-log")]
+pub fn send(browser: &Browser, method: &str, params: serde_json::Value) {
+    let Some(host) = browser.host() else { return };
+    let message = serde_json::json!({ "id": NEXT_ID.fetch_add(1, Ordering::Relaxed), "method": method, "params": params });
+    host.send_dev_tools_message(Some(message.to_string().as_bytes()));
+}
+
 static LAST_THROTTLE_BITS: AtomicU32 = AtomicU32::new(1.0f32.to_bits());
 
 pub fn set_cpu_throttling(browser: &Browser, value: f32) {

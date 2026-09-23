@@ -664,6 +664,10 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
     if let Some(rest) = message_string.strip_prefix("audio-log ") {
         if rest.len() <= 8 * 1024 {
             modules::audio_log::page(rest);
+            // catch a real cut even when the tester presses F9 a few seconds late
+            if rest.contains("\"DROPOUT\"") {
+                modules::audio_trace::capture_dropout(browser);
+            }
         }
         return;
     }
