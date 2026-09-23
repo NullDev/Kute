@@ -7,6 +7,7 @@
 //! and a marker for every F9 the tester presses when they hear a cut.
 
 use std::{
+    collections::HashMap,
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
@@ -46,6 +47,9 @@ const PKEY_AUDIO_ENDPOINT_FORM_FACTOR: PROPERTYKEY = PROPERTYKEY {
 };
 
 static MARKS: AtomicU32 = AtomicU32::new(0);
+/// how many seconds of machine load the log keeps for the next cut
+const LOAD_SAMPLES: usize = 10;
+static LOAD: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static FILE: Mutex<Option<fs::File>> = Mutex::new(None);
 
 /// The bundle the exe was built with, the same file the updater compares against.
@@ -133,6 +137,7 @@ pub fn init() {
         watch_default_device();
     });
     thread::spawn(tail_cef_log);
+    thread::spawn(watch_load);
 }
 
 /// The audio service process (see main.rs), which mixes the game's sound and hands it to Windows. A second
@@ -153,7 +158,126 @@ pub fn mark() {
     let number = MARKS.fetch_add(1, Ordering::Relaxed) + 1;
     line("");
     line(&format!("########## MARK {number}: the tester heard a cut here ##########"));
+    dump_load();
     line("");
+}
+
+/// The last seconds of machine load, written where a cut is in the log. A cut on a machine that had CPU left is a
+/// different problem from a cut on a machine that had none.
+pub fn dump_load() {
+    let samples = LOAD.lock().unwrap().clone();
+    if samples.is_empty() {
+        return;
+    }
+    line("   load in the seconds before this (share of the whole cpu, kute processes by pid):");
+    for sample in samples {
+        line(&format!("   {sample}"));
+    }
+}
+
+/// Every second: how busy the machine and our own processes were. Only the last ten are kept, they are written
+/// into the log where a cut happens.
+fn watch_load() {
+    let mut previous: HashMap<u32, u64> = HashMap::new();
+    let mut previous_system: Option<(u64, u64)> = None;
+    loop {
+        let mut current: HashMap<u32, u64> = HashMap::new();
+        for pid in kute_processes() {
+            if let Some(time) = process_cpu_100ns(pid) {
+                current.insert(pid, time);
+            }
+        }
+        let system = system_cpu_100ns();
+        let mut parts: Vec<String> = Vec::new();
+        if let (Some((busy_before, total_before)), Some((busy, total))) = (previous_system, system) {
+            let elapsed = total.saturating_sub(total_before);
+            if elapsed > 0 {
+                parts.push(format!("system={}%", busy.saturating_sub(busy_before) * 100 / elapsed));
+            }
+        }
+        let cores = std::thread::available_parallelism().map(|n| n.get() as u64).unwrap_or(1);
+        let mut pids: Vec<&u32> = current.keys().collect();
+        pids.sort();
+        for pid in pids {
+            let Some(before) = previous.get(pid) else { continue };
+            let used = current[pid].saturating_sub(*before);
+            // the sample is a second, so the share of one core is the time in 100 ns units over 10 million
+            let share = used * 100 / (10_000_000 * cores);
+            if share > 0 {
+                parts.push(format!("{pid}={share}%"));
+            }
+        }
+        if !parts.is_empty() {
+            let mut samples = LOAD.lock().unwrap();
+            if samples.len() >= LOAD_SAMPLES {
+                samples.remove(0);
+            }
+            samples.push(format!("[{}] {}", stamp(), parts.join(" ")));
+        }
+        previous = current;
+        previous_system = system;
+        thread::sleep(Duration::from_secs(1));
+    }
+}
+
+fn kute_processes() -> Vec<u32> {
+    use windows::Win32::System::Diagnostics::ToolHelp::*;
+    let mut pids = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return pids;
+        };
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let name = String::from_utf16_lossy(&entry.szExeFile);
+                if name.trim_end_matches('\0').eq_ignore_ascii_case("kute.exe") {
+                    pids.push(entry.th32ProcessID);
+                }
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = windows::Win32::Foundation::CloseHandle(snapshot);
+    }
+    pids
+}
+
+fn process_cpu_100ns(pid: u32) -> Option<u64> {
+    use windows::Win32::{Foundation::*, System::Threading::*};
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut creation = Default::default();
+        let mut exit = Default::default();
+        let mut kernel = windows::Win32::Foundation::FILETIME::default();
+        let mut user = windows::Win32::Foundation::FILETIME::default();
+        let ok = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user).is_ok();
+        let _ = CloseHandle(handle);
+        if !ok {
+            return None;
+        }
+        Some(filetime_100ns(kernel) + filetime_100ns(user))
+    }
+}
+
+/// (busy, total) of the whole machine
+fn system_cpu_100ns() -> Option<(u64, u64)> {
+    use windows::Win32::System::Threading::GetSystemTimes;
+    let mut idle = windows::Win32::Foundation::FILETIME::default();
+    let mut kernel = windows::Win32::Foundation::FILETIME::default();
+    let mut user = windows::Win32::Foundation::FILETIME::default();
+    unsafe { GetSystemTimes(Some(&mut idle), Some(&mut kernel), Some(&mut user)).ok()? };
+    // kernel includes the idle time
+    let total = filetime_100ns(kernel) + filetime_100ns(user);
+    Some((total.saturating_sub(filetime_100ns(idle)), total))
+}
+
+fn filetime_100ns(time: windows::Win32::Foundation::FILETIME) -> u64 {
+    ((time.dwHighDateTime as u64) << 32) | time.dwLowDateTime as u64
 }
 
 /// One message from the page ("audio-log <json>", see handlers.rs). `{"section": ..., "data": {...}}` is a block
@@ -169,6 +293,9 @@ pub fn page(json: &str) {
             }
             let parts: Vec<String> = map.iter().map(|(key, value)| format!("{key}={value}")).collect();
             line(&format!("page: {}", parts.join(" ")));
+            if json.contains("\"DROPOUT\"") {
+                dump_load();
+            }
         }
         _ => line(&format!("page: {json}")),
     }
