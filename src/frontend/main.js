@@ -171,6 +171,8 @@ Object.defineProperty(window, "gameLoaded", {
         if (kute?.settings?.data?.spotifyOverlay && kute.hostFeatures?.includes("spotify")) import("./modules/spotifyOverlay.js");
         if (kute?.settings?.data?.motionBlur) import("./modules/motionBlur.js");
         if (kute?.settings?.data?.keystrokes) import("./modules/keystrokes.js");
+        // testing branch: F9 capture of the last 30 s
+        import("./modules/recorder.js");
         // always: customize button needs the module
         if (kute.hostFeatures?.includes("custom-sky")) import("./modules/customSky.js");
 
