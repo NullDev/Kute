@@ -690,7 +690,7 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
     // F9 capture, the page's frames of the last 30 s
     if let Some(page) = message_string.strip_prefix("perf-capture ") {
         if page.len() <= 16 * 1024 * 1024 {
-            modules::recorder::capture(browser.identifier(), page.to_string());
+            modules::recorder::capture(browser, page.to_string());
         }
         return;
     }

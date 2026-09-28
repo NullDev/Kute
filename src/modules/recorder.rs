@@ -1,15 +1,18 @@
 use std::{
     cell::RefCell,
-    collections::VecDeque,
-    sync::{Mutex, Once},
+    collections::{HashMap, VecDeque},
+    sync::{Condvar, Mutex, Once},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use cef::{rc::*, *};
 use serde_json::{Value, json};
-use windows::Win32::System::SystemInformation::GetLocalTime;
+use windows::Win32::System::{
+    Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
+    SystemInformation::GetLocalTime,
+};
 
-use crate::{app, bridge, debug_print, modules::devtools, utils, utils::config};
+use crate::{app, bridge, debug_print, modules::devtools, utils, utils::config, window};
 
 // testing builds only: what F9 saves next to the page's frames (frontend/modules/recorder.js)
 
@@ -21,6 +24,14 @@ const GAP_MS: f64 = 150.0;
 const GAP_FACTOR: f64 = 4.0;
 const GAP_CONTEXT: usize = 20;
 const GAP_CONTEXT_MIN: usize = 5;
+// the server sends a tick as a few messages at once
+const TICK_MS: f64 = 5.0;
+// only v8's gc scopes: they are emitted during collections only, so the ring costs next to nothing between them.
+// "v8.gc" matches nothing, v8 files them under the disabled-by-default name (and devtools.timeline, every task).
+// with only disabled-by-default names included chromium adds every default category (153 MB in 30 s), hence the "*" exclude
+const GC_TRACE: &str = r#"{"transferMode":"ReportEvents","traceConfig":{"recordMode":"recordContinuously","traceBufferSizeInKb":32768,"includedCategories":["disabled-by-default-v8.gc"],"excludedCategories":["*"]}}"#;
+const GC_LISTED: usize = 25;
+const GC_MIN_MS: f64 = 2.0;
 
 struct SocketFrame {
     // epoch ms when the browser process got the event, lines up with the page's clock
@@ -46,6 +57,9 @@ static PRESENTS: Mutex<VecDeque<PresentSecond>> = Mutex::new(VecDeque::new());
 // devtools request id of the game's lobby socket
 static LOBBY_SOCKET: Mutex<Option<String>> = Mutex::new(None);
 static SAMPLER: Once = Once::new();
+// raw Tracing.dataCollected params until Tracing.tracingComplete
+static TRACE: Mutex<(Vec<Vec<u8>>, bool)> = Mutex::new((Vec::new(), false));
+static TRACE_DONE: Condvar = Condvar::new();
 
 thread_local! {
     static REGISTRATIONS: RefCell<Vec<Registration>> = const { RefCell::new(Vec::new()) };
@@ -75,6 +89,16 @@ wrap_dev_tools_message_observer! {
         fn on_dev_tools_event(&self, _browser: Option<&mut Browser>, method: Option<&CefString>, params: Option<&[u8]>) {
             let (Some(method), Some(params)) = (method, params) else { return };
             let method = method.to_string();
+            if method == "Tracing.dataCollected" || method == "Tracing.tracingComplete" {
+                let mut trace = TRACE.lock().unwrap();
+                if method == "Tracing.dataCollected" {
+                    trace.0.push(params.to_vec());
+                } else {
+                    trace.1 = true;
+                    TRACE_DONE.notify_all();
+                }
+                return;
+            }
             let Some(kind) = method.strip_prefix("Network.webSocket") else { return };
             let at = now_ms();
             let Ok(json) = serde_json::from_slice::<Value>(params) else { return };
@@ -115,6 +139,7 @@ pub fn load(browser: &Browser) {
             REGISTRATIONS.with_borrow_mut(|registrations| registrations.push(registration));
         }
     }
+    start_gc_trace(browser);
     // takes the hook's intervals every second, auto-detect's own present readings are off while this runs
     SAMPLER.call_once(|| {
         std::thread::spawn(|| {
@@ -142,6 +167,174 @@ pub fn load(browser: &Browser) {
     });
 }
 
+fn start_gc_trace(browser: &Browser) {
+    devtools::send(browser, "Tracing.start", serde_json::from_str(GC_TRACE).unwrap_or_default());
+}
+
+wrap_task! {
+    struct RestartTraceTask {
+        browser_id: i32,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(browser) = window::browser_by_id(self.browser_id) {
+                start_gc_trace(&browser);
+            }
+        }
+    }
+}
+
+// trace timestamps are chromium's TimeTicks, which on windows is the performance counter
+fn ticks_to_epoch_ms() -> f64 {
+    let (mut counter, mut frequency) = (0i64, 0i64);
+    unsafe {
+        QueryPerformanceCounter(&mut counter).ok();
+        QueryPerformanceFrequency(&mut frequency).ok();
+    }
+    if frequency == 0 {
+        return 0.0;
+    }
+    now_ms() - counter as f64 / frequency as f64 * 1000.0
+}
+
+struct GcPause {
+    at: f64,
+    ms: f64,
+    name: String,
+}
+
+// start ms, duration ms, event name
+type Span = (f64, f64, String);
+
+/// Outermost gc pauses on the renderer main thread with the most gc time, the game's.
+fn gc_pauses(chunks: &[Vec<u8>], offset: f64) -> Vec<GcPause> {
+    let mut main_threads: Vec<(i64, i64)> = Vec::new();
+    let mut spans: HashMap<(i64, i64), Vec<Span>> = HashMap::new();
+    let mut open: HashMap<(i64, i64, String), f64> = HashMap::new();
+    for chunk in chunks {
+        let Ok(json) = serde_json::from_slice::<Value>(chunk) else { continue };
+        let Some(events) = json["value"].as_array() else { continue };
+        for event in events {
+            let key = (event["pid"].as_i64().unwrap_or(0), event["tid"].as_i64().unwrap_or(0));
+            let ts = event["ts"].as_f64().unwrap_or(0.0) / 1000.0;
+            let name = event["name"].as_str().unwrap_or_default();
+            let phase = event["ph"].as_str().unwrap_or_default();
+            // chromium adds events of its own to any trace
+            if phase != "M" && !event["cat"].as_str().is_some_and(|category| category.contains("v8.gc")) {
+                continue;
+            }
+            match phase {
+                "M" if name == "thread_name" && event["args"]["name"].as_str() == Some("CrRendererMain") => main_threads.push(key),
+                "X" => spans
+                    .entry(key)
+                    .or_default()
+                    .push((ts, event["dur"].as_f64().unwrap_or(0.0) / 1000.0, name.to_string())),
+                "B" => {
+                    open.insert((key.0, key.1, name.to_string()), ts);
+                }
+                "E" => {
+                    if let Some(start) = open.remove(&(key.0, key.1, name.to_string())) {
+                        spans.entry(key).or_default().push((start, ts - start, name.to_string()));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let total = |list: &Vec<Span>| list.iter().map(|span| span.1).sum::<f64>();
+    let game = spans
+        .iter()
+        .filter(|(key, _)| main_threads.contains(key))
+        .max_by(|a, b| total(a.1).total_cmp(&total(b.1)))
+        .map(|(key, _)| *key);
+    let Some(mut spans) = game.and_then(|key| spans.remove(&key)) else {
+        return Vec::new();
+    };
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.1.total_cmp(&a.1)));
+    let mut pauses: Vec<GcPause> = Vec::new();
+    let mut covered_until = f64::MIN;
+    for (start, ms, name) in spans {
+        // nested scopes are parts of the pause that holds them
+        if start < covered_until {
+            continue;
+        }
+        covered_until = start + ms;
+        pauses.push(GcPause { at: start + offset, ms, name });
+    }
+    pauses
+}
+
+fn gc_summary(pauses: &[GcPause], page: &Value, taken: f64, trace: &str) -> Vec<String> {
+    let since = taken - SUMMARY_MS;
+    let recent: Vec<&GcPause> = pauses.iter().filter(|pause| pause.at >= since).collect();
+    let mut lines = vec![format!(
+        "GC pauses on the game's main thread: {} in the last {} s, {:.0} ms in total",
+        recent.len(),
+        SUMMARY_MS / 1000.0,
+        // an empty f64 sum is -0
+        recent.iter().map(|pause| pause.ms).sum::<f64>() + 0.0
+    )];
+    if pauses.is_empty() {
+        lines.push(format!("  (no gc pauses found, {trace})"));
+        return lines;
+    }
+    let mut by_name: HashMap<&str, (usize, f64, f64)> = HashMap::new();
+    for pause in &recent {
+        let entry = by_name.entry(pause.name.as_str()).or_default();
+        entry.0 += 1;
+        entry.1 += pause.ms;
+        entry.2 = entry.2.max(pause.ms);
+    }
+    let mut kinds: Vec<_> = by_name.into_iter().collect();
+    kinds.sort_by(|a, b| b.1.1.total_cmp(&a.1.1));
+    for (name, (count, total, worst)) in kinds {
+        lines.push(format!("  {name}: {count}x, {total:.1} ms in total, worst {worst:.1} ms"));
+    }
+
+    // the page's hitches, same rule as recorder.js
+    let intervals: Vec<f64> = page["frameIntervals"]
+        .as_array()
+        .map(|list| list.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default();
+    let mut sorted = intervals.clone();
+    sorted.sort_by(f64::total_cmp);
+    let median = percentile(&sorted, 0.5);
+    let limit = (median * 4.0).max(6.0);
+    let mut end = page["timeOrigin"].as_f64().unwrap_or(0.0) + page["frameStart"].as_f64().unwrap_or(0.0);
+    let mut hitches: Vec<(f64, f64, f64)> = Vec::new();
+    for ms in intervals {
+        end += ms;
+        if ms > limit {
+            let gc: f64 = recent
+                .iter()
+                .map(|pause| (pause.at + pause.ms).min(end) - pause.at.max(end - ms))
+                .filter(|overlap| *overlap > 0.0)
+                .sum();
+            hitches.push((end, ms, gc));
+        }
+    }
+    if !hitches.is_empty() {
+        let with_gc = hitches.iter().filter(|(_, ms, gc)| *gc >= (ms - median) * 0.5).count();
+        lines.push(format!("Hitches mostly filled by a GC pause: {with_gc} of {}, the worst:", hitches.len()));
+        hitches.sort_by(|a, b| b.1.total_cmp(&a.1));
+        hitches.truncate(GC_LISTED);
+        hitches.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (end, ms, gc) in hitches {
+            let cause = if gc > 0.05 { format!("GC {gc:.1} ms of it") } else { "no GC".to_string() };
+            lines.push(format!("  {:>7.2} s before F9: {ms:.1} ms frame, {cause}", (taken - end) / 1000.0));
+        }
+    }
+    let big: Vec<&&GcPause> = recent.iter().filter(|pause| pause.ms >= GC_MIN_MS).collect();
+    if !big.is_empty() {
+        lines.push(format!("GC pauses of {GC_MIN_MS} ms and more:"));
+        for pause in big.iter().take(GC_LISTED) {
+            lines.push(format!("  {:>7.2} s before F9: {} {:.1} ms", (taken - pause.at) / 1000.0, pause.name, pause.ms));
+        }
+    }
+    lines
+}
+
 fn folder_name() -> String {
     let t = unsafe { GetLocalTime() };
     format!("{:04}-{:02}-{:02}_{:02}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
@@ -166,11 +359,20 @@ fn socket_summary(frames: &[&SocketFrame], marks: &[(f64, String)], taken: f64) 
     if received.len() < 2 {
         lines.push("  (no lobby traffic recorded, was a match running?)".to_string());
     } else {
-        let gaps: Vec<f64> = received.windows(2).map(|pair| pair[1].mono - pair[0].mono).collect();
+        // (first message, count) per tick
+        let mut ticks: Vec<(&SocketFrame, usize)> = Vec::new();
+        for frame in &received {
+            match ticks.last_mut() {
+                Some((first, count)) if frame.mono - first.mono < TICK_MS => *count += 1,
+                _ => ticks.push((frame, 1)),
+            }
+        }
+        let gaps: Vec<f64> = ticks.windows(2).map(|pair| pair[1].0.mono - pair[0].0.mono).collect();
         let mut sorted = gaps.clone();
         sorted.sort_by(f64::total_cmp);
         lines.push(format!(
-            "  gap between server messages: median {:.1} ms, p99 {:.1} ms, max {:.1} ms",
+            "  gap between server ticks ({} ticks): median {:.1} ms, p99 {:.1} ms, max {:.1} ms",
+            ticks.len(),
             percentile(&sorted, 0.5),
             percentile(&sorted, 0.99),
             percentile(&sorted, 1.0)
@@ -186,9 +388,13 @@ fn socket_summary(frames: &[&SocketFrame], marks: &[(f64, String)], taken: f64) 
             if *gap < GAP_MS.max(usual * GAP_FACTOR) {
                 continue;
             }
-            let after = received[index + 1];
+            let after = ticks[index + 1].0;
             // late data arrives in a burst, a quiet server does not
-            let burst = received[index + 1..].iter().take_while(|frame| frame.mono - after.mono < 30.0).count();
+            let burst: usize = ticks[index + 1..]
+                .iter()
+                .take_while(|(first, _)| first.mono - after.mono < 30.0)
+                .map(|(_, count)| count)
+                .sum();
             lines.push(format!(
                 "  {:>7.2} s before F9: nothing for {:.0} ms (usually {:.0} ms), then {} messages within 30 ms",
                 (taken - after.at) / 1000.0,
@@ -237,9 +443,27 @@ fn present_summary(presents: &[&PresentSecond], taken: f64) -> Vec<String> {
 }
 
 /// Writes the capture for F9. `page` is the page's JSON: frames, long frames, events and its own summary lines.
-pub fn capture(browser_id: i32, page: String) {
+pub fn capture(browser: &Browser, page: String) {
+    let browser_id = browser.identifier();
+    *TRACE.lock().unwrap() = (Vec::new(), false);
+    devtools::send(browser, "Tracing.end", json!({}));
     std::thread::spawn(move || {
         let taken = now_ms();
+        let offset = ticks_to_epoch_ms();
+        let (chunks, complete) = {
+            let trace = TRACE.lock().unwrap();
+            let (mut trace, _) = TRACE_DONE.wait_timeout_while(trace, Duration::from_secs(5), |trace| !trace.1).unwrap();
+            (std::mem::take(&mut trace.0), trace.1)
+        };
+        let mut restart = RestartTraceTask::new(browser_id);
+        post_task(ThreadId::UI, Some(&mut restart));
+        let pauses = gc_pauses(&chunks, offset);
+        let trace = format!(
+            "trace: {} chunks, {} bytes, {}",
+            chunks.len(),
+            chunks.iter().map(Vec::len).sum::<usize>(),
+            if complete { "complete" } else { "never completed" }
+        );
         let page: Value = serde_json::from_str(&page).unwrap_or(Value::Null);
         let since = taken - SUMMARY_MS;
 
@@ -255,6 +479,8 @@ pub fn capture(browser_id: i32, page: String) {
             summary.extend(lines.iter().filter_map(|line| line.as_str().map(str::to_string)));
             summary.push(String::new());
         }
+        summary.extend(gc_summary(&pauses, &page, taken, &trace));
+        summary.push(String::new());
         summary.extend(present_summary(&recent_presents, taken));
         summary.push(String::new());
         summary.extend(socket_summary(&recent_frames, &recent_marks, taken));
@@ -267,6 +493,10 @@ pub fn capture(browser_id: i32, page: String) {
             "socket": recent_frames.iter().map(|frame| json!([frame.at, frame.mono, frame.sent, frame.bytes])).collect::<Vec<_>>(),
             "socketFormat": ["epoch ms", "devtools ms", "sent", "bytes"],
             "socketMarks": recent_marks,
+            "gc": pauses.iter().filter(|pause| pause.at >= since).map(|pause| json!([pause.at, pause.ms, pause.name])).collect::<Vec<_>>(),
+            "gcFormat": ["epoch ms", "ms", "event"],
+            "gcTrace": trace,
+            "clockOffset": { "qpc": offset, "socket": recent_frames.iter().map(|frame| frame.at - frame.mono).fold(f64::NAN, f64::min) },
             "presents": recent_presents.iter().map(|second| json!({
                 "at": second.at, "fps": second.fps, "p50": second.p50, "p99": second.p99, "max": second.max, "samples": second.samples,
             })).collect::<Vec<_>>(),
