@@ -687,6 +687,13 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         }
         return;
     }
+    // F9 capture, the page's frames of the last 30 s
+    if let Some(page) = message_string.strip_prefix("perf-capture ") {
+        if page.len() <= 16 * 1024 * 1024 {
+            modules::recorder::capture(browser.identifier(), page.to_string());
+        }
+        return;
+    }
     if let Some(rest) = message_string.strip_prefix("scripts-") {
         if is_krunker_frame(frame) && rest.len() <= 5 * 1024 * 1024 {
             queue_manager_message(browser, message_string);

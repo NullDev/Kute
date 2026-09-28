@@ -30,6 +30,7 @@ pub mod modules {
     pub mod obs;
     pub mod ping;
     pub mod priority;
+    pub mod recorder;
     pub mod render_hook;
     pub mod resource;
     pub mod skybox;
