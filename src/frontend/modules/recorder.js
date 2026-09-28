@@ -1,7 +1,8 @@
 import { kute } from "../client.js";
 
 /**
- * Testing builds only. Keeps the last frames of the page and Chromium's long animation frames, F9 hands them to the
+ * Testing builds only. Keeps the last frames of the page, Chromium's long animation frames and how long mouse and key
+ * input waited before the page got it. F9 hands them to the
  * host (modules/recorder.rs), which adds the lobby socket traffic and the hook's presents and writes
  * Documents\kute\captures\<time>\ (summary.txt to read, capture.json for the details).
  */
@@ -12,6 +13,10 @@ const WINDOW_MS = 30000;
 const MAX_LONG_FRAMES = 300;
 const MAX_EVENTS = 200;
 const LISTED_HITCHES = 25;
+// mouse events while locked, about one per frame
+const INPUT_RING = 1 << 16;
+const MAX_KEYS = 500;
+const LISTED_DELAYS = 15;
 
 /**
  * @typedef {object} LongFrameScript
@@ -55,6 +60,13 @@ class Recorder {
         /** @type {[number, string][]} */
         this.events = [];
         this.busy = false;
+        // per mouse event: when the page got it, the timestamp of the oldest raw packet in it, how many packets
+        this.inputAt = new Float64Array(INPUT_RING);
+        this.inputOldest = new Float64Array(INPUT_RING);
+        this.inputPackets = new Uint16Array(INPUT_RING);
+        this.inputCount = 0;
+        /** @type {[number, number][]} when, wait */
+        this.keys = [];
 
         // its own loop, the game's rAF wrapper stays as it is. runs in the same frames as the game's callback
         /** @param {number} timestamp */
@@ -84,7 +96,22 @@ class Recorder {
         window.addEventListener("focus", () => note("window got focus"));
         window.addEventListener("resize", () => note(`resized to ${window.innerWidth}x${window.innerHeight}`));
 
+        // chromium hands the page all raw packets since the last event at once, the oldest one waited the longest
+        // pointermove, a plain mousemove has no getCoalescedEvents
+        window.addEventListener("pointermove", (event) => {
+            if (document.pointerLockElement === null) return;
+            const packets = event.getCoalescedEvents();
+            const index = this.inputCount++ & (INPUT_RING - 1);
+            this.inputAt[index] = performance.now();
+            this.inputOldest[index] = packets.length ? packets[0].timeStamp : event.timeStamp;
+            this.inputPackets[index] = Math.min(packets.length || 1, 65535);
+        }, { capture: true, passive: true });
+
         window.addEventListener("keydown", (event) => {
+            if (!event.repeat){
+                this.keys.push([performance.now(), performance.now() - event.timeStamp]);
+                if (this.keys.length > MAX_KEYS) this.keys.shift();
+            }
             if (event.key !== "F9" || event.repeat) return;
             this.capture();
         }, true);
@@ -163,6 +190,25 @@ class Recorder {
         /** @param {number} at */
         const ago = (at) => `${((now - at) / 1000).toFixed(2).padStart(7)} s before F9`;
 
+        /** @type {{at: number, wait: number, packets: number}[]} */
+        const input = [];
+        for (let index = this.inputCount - 1; index >= Math.max(0, this.inputCount - INPUT_RING); index--){
+            const slot = index & (INPUT_RING - 1);
+            if (now - this.inputAt[slot] > WINDOW_MS) break;
+            input.push({ at: this.inputAt[slot], wait: this.inputAt[slot] - this.inputOldest[slot], packets: this.inputPackets[slot] });
+        }
+        input.reverse();
+        const waits = input.map((event) => event.wait).sort((a, b) => a - b);
+        const waitMedian = percentile(waits, 0.5);
+        const waitLimit = Math.max(8, waitMedian * 4);
+        const delayed = input
+            .filter((event) => event.wait > waitLimit)
+            .sort((a, b) => b.wait - a.wait)
+            .slice(0, LISTED_DELAYS)
+            .sort((a, b) => a.at - b.at);
+        const keys = this.keys.filter(([at]) => now - at <= WINDOW_MS);
+        const keyWaits = keys.map(([, wait]) => wait).sort((a, b) => a - b);
+
         const summary = [
             `Match: ${activity ? `${activity.mode ?? "?"} on ${activity.map ?? "?"} (${activity.id ?? "no game"}${activity.custom ? ", private" : ""})` : "unknown"}`,
             `Page frames: ${intervals.length} in ${(span / 1000).toFixed(1)} s = ${span > 0 ? Math.round(intervals.length / (span / 1000)) : 0} fps`,
@@ -173,6 +219,14 @@ class Recorder {
             ...longFrames.slice(-15).map((frame) => `  ${ago(frame.start)}: ${frame.duration.toFixed(0)} ms, ${
                 frame.scripts.map((script) => `${script.source || script.invoker} ${script.functionName} ${script.duration.toFixed(0)} ms`).join(" | ") || "no script"
             }`),
+            input.length
+                ? `Mouse input while locked: ${input.length} events with ${input.reduce((sum, event) => sum + event.packets, 0)} raw packets, oldest packet waited median ${waitMedian.toFixed(2)} ms, p99 ${percentile(waits, 0.99).toFixed(2)} ms, worst ${percentile(waits, 1).toFixed(2)} ms`
+                : "Mouse input while locked: none",
+            ...(delayed.length ? [`  mouse input that waited over ${waitLimit.toFixed(1)} ms (${input.filter((event) => event.wait > waitLimit).length}x), the worst:`] : []),
+            ...delayed.map((event) => `  ${ago(event.at)}: ${event.wait.toFixed(1)} ms, ${event.packets} packets at once`),
+            keys.length
+                ? `Key presses: ${keys.length}, waited median ${percentile(keyWaits, 0.5).toFixed(2)} ms, worst ${percentile(keyWaits, 1).toFixed(2)} ms`
+                : "Key presses: none",
             "Page events:",
             ...(events.length ? events.map(([at, text]) => `  ${ago(at)}: ${text}`) : ["  none"]),
         ];
@@ -187,6 +241,9 @@ class Recorder {
             frameIntervals: intervals.map(round),
             longFrames,
             events: events.map(([at, text]) => [round(at), text]),
+            input: input.map((event) => [round(event.at), round(event.wait), event.packets]),
+            inputFormat: ["page ms", "wait of the oldest packet ms", "packets"],
+            keys: keys.map(([at, wait]) => [round(at), round(wait)]),
         };
         window.chrome.webview.postMessage(`perf-capture ${JSON.stringify(payload)}`);
     }
