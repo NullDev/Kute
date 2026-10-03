@@ -197,6 +197,7 @@ export async function searchPipeline({ hz, progress, cancelled }){
     const contenders = [];
     for (const [index, flip] of flips.entries()){
         const reading = read(first[index + 1]);
+        /** @type {keyof typeof SCREENED} */
         let verdict = reading.invalid ? "failed" : screen(reading, base);
         if (noisy && !reading.invalid) verdict = "contender";
         const label = `${flip.entry.label} ${flip.pipeline[flip.entry.setting] ? "on" : "off"}`;
