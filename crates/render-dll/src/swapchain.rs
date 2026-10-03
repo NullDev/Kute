@@ -62,15 +62,26 @@ pub(crate) fn is_main_swapchain(swapchain: *mut c_void) -> bool {
 
 pub(crate) static TEARING_SUPPORTED: AtomicBool = AtomicBool::new(false);
 
-// same check as chromium's DXGISwapChainTearingSupported, cached
+// the KUTE_HOOK_* knobs only count in bench processes (bench.rs sets KUTE_BENCH_HOOK), a stale variable from a
+// benchmark shell must not change a player's client
+pub(crate) fn knobs_allowed() -> bool {
+    static ALLOWED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ALLOWED.get_or_init(|| std::env::var_os("KUTE_BENCH_HOOK").is_some())
+}
+
 pub(crate) fn knob(name: &str, default: u32) -> u32 {
+    if !knobs_allowed() {
+        return default;
+    }
+    // what DXGI accepts: 2 to 16 buffers, 1 to 16 frames of latency
     std::env::var(name)
         .ok()
         .and_then(|value| value.parse().ok())
-        .filter(|&value| value > 0)
+        .filter(|&value| value > 0 && value <= 16)
         .unwrap_or(default)
 }
 
+// same check as chromium's DXGISwapChainTearingSupported, cached
 unsafe fn tearing_supported(factory: *mut c_void) -> bool {
     static CHECKED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let supported = *CHECKED.get_or_init(|| unsafe {
@@ -138,7 +149,8 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
         );
         // KUTE_HOOK_STOCKCHAIN=1: bench knob, chromium's own chain untouched (no latency, no wait handle), the
         // present hook then only detours. KUTE_HOOK_NOMMCSS=1 skips the "Games" thread characteristics
-        if knob("KUTE_HOOK_STOCKCHAIN", 0) == 1 {
+        // a chain prepared for a hook that will never run is pure cost, chromium's own stays then
+        if knob("KUTE_HOOK_STOCKCHAIN", 0) == 1 || crate::present_hook_failed() {
             return create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain);
         }
         let mut desc = *pdesc;
