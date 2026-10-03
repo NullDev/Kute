@@ -1235,6 +1235,7 @@ class AutoDetect {
                 ...Object.fromEntries(["gameFpsLimit", "throttle", "inMenuThrottle", "uncapFps", "patchFrameLimiter", "obsCapturePlugin", "renderStats", "performanceMode", "webviewPriority", ...PIPELINE.map((entry) => entry.setting)]
                     .map((key) => [key, baseline.client[key] ?? kute.settings.data[key] ?? null])),
                 gameFrameCap: frameCapBefore,
+                hook: specs.hook ?? null,
                 limiter: kute.frameLimiter ?? null,
                 running: kute.running ?? null,
             },
