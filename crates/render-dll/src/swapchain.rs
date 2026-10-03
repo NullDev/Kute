@@ -114,6 +114,7 @@ unsafe fn create_swapchain_unmodified(
         let result = original_fn(this, pdevice, pdesc, prestricttooutput, ppswapchain);
         if result.is_ok() && !ppswapchain.is_null() {
             crate::hook_present_of(*ppswapchain);
+            crate::note_chain(false);
         }
 
         // a new chain can reuse a dead one's address, drop its stale wait handle
@@ -156,8 +157,9 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
         let mut desc = *pdesc;
         // no SHADER_INPUT, it costs 25-50% of the uncapped present rate and nothing needs it
         desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        // KUTE_HOOK_BUFFERS and KUTE_HOOK_LATENCY: bench knobs to bisect the hook's cost on a starved cpu, not settings
-        desc.BufferCount = knob("KUTE_HOOK_BUFFERS", 2);
+        // KUTE_HOOK_BUFFERS and KUTE_HOOK_LATENCY: bench knobs to bisect the hook's cost on a starved cpu, not settings.
+        // flip sequential needs two buffers, latency may be one
+        desc.BufferCount = knob("KUTE_HOOK_BUFFERS", 2).max(2);
         desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; // discard crashes
         desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
         // DXGI_SCALING_NONE crashes
@@ -175,7 +177,14 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
             create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain)
         } else {
             debug_print!("render: swap chain created pointer={:?}", *ppswapchain);
-            crate::hook_present_of(*ppswapchain);
+            if !crate::hook_present_of(*ppswapchain) {
+                // prepared for a hook that does not see it, that chain would cost without paying back
+                debug_print!("render: the hook does not cover this chain, releasing it and creating it unmodified");
+                drop(IDXGISwapChain1::from_raw(*ppswapchain));
+                *ppswapchain = std::ptr::null_mut();
+                return create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain);
+            }
+            crate::note_chain(true);
             let swap_chain = IDXGISwapChain1::from_raw(*ppswapchain);
             // capture needs the real device
             let device = match swap_chain.GetDevice::<ID3D11Device>() {

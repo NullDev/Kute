@@ -86,17 +86,41 @@ static PRESENT_HOOK: std::sync::Mutex<HookStep> = std::sync::Mutex::new(HookStep
 // chain the hook does not see
 static PRESENT_TARGET: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+static INSTALL_US: AtomicU64 = AtomicU64::new(0);
+static MISMATCH_SEEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// chains returned to chromium since attach, prepared for the hook and left as they were
+static MODIFIED_CHAINS: AtomicU64 = AtomicU64::new(0);
+static STOCK_CHAINS: AtomicU64 = AtomicU64::new(0);
+
 pub(crate) fn present_hook_failed() -> bool {
     *PRESENT_HOOK.lock().unwrap() == HookStep::Failed
 }
 
-fn publish_hook_state(step: HookStep, install_us: u64, mismatch: bool) {
+/// the host decodes this in app.rs: low byte state, bit 4 mismatch, bits 8 to 31 install microseconds, bits 32 to 47
+/// modified chains, bits 48 and up stock chains
+pub(crate) fn pack_hook_state(step: HookStep, mismatch: bool, install_us: u64, modified: u64, stock: u64) -> u64 {
+    step.code() | if mismatch { HOOK_MISMATCH } else { 0 } | (install_us.min(0xFF_FFFF) << 8) | (modified.min(0xFFFF) << 32) | (stock.min(0xFFFF) << 48)
+}
+
+fn publish_hook_state(step: HookStep) {
     let ptr = SHARED_MEM_PTR.load(Ordering::Acquire);
     if ptr == 0 {
         return;
     }
-    let value = step.code() | if mismatch { HOOK_MISMATCH } else { 0 } | (install_us.min(0xFF_FFFF) << 8);
+    let value = pack_hook_state(
+        step,
+        MISMATCH_SEEN.load(Ordering::Relaxed),
+        INSTALL_US.load(Ordering::Relaxed),
+        MODIFIED_CHAINS.load(Ordering::Relaxed),
+        STOCK_CHAINS.load(Ordering::Relaxed),
+    );
     unsafe { shared!(ptr, hook_state).store(value, Ordering::Release) };
+}
+
+/// counts a chain handed to chromium, so a bench result can show whether chains got prepared while the hook was down
+pub(crate) fn note_chain(modified: bool) {
+    if modified { &MODIFIED_CHAINS } else { &STOCK_CHAINS }.fetch_add(1, Ordering::Relaxed);
+    publish_hook_state(*PRESENT_HOOK.lock().unwrap());
 }
 
 // bench knob: KUTE_HOOK_FAIL=create:N or enable:N makes the first N tries of that step fail
@@ -121,21 +145,24 @@ fn injected_failure(step: &str) -> bool {
 }
 
 /// installs the Present1 hook from this chain's vtable, once, with the step and its outcome published to the host.
-/// called for every chain chromium creates: later ones only check that their Present1 is the hooked one
-pub(crate) unsafe fn hook_present_of(swap_chain: *mut c_void) {
+/// called for every chain chromium creates: later ones only check that their Present1 is the hooked one. returns
+/// whether this chain's presents reach the hook, the caller leaves a chain that they do not as chromium made it
+pub(crate) unsafe fn hook_present_of(swap_chain: *mut c_void) -> bool {
     let started = std::time::Instant::now();
     let mut step = PRESENT_HOOK.lock().unwrap();
     let target = unsafe { IDXGISwapChain1::from_raw_borrowed(&swap_chain).unwrap().vtable().Present1 as *mut c_void };
     let hooked = PRESENT_TARGET.load(Ordering::Acquire);
     if hooked != 0 && hooked != target as usize {
         debug_print!("render: a swap chain with another Present1 ({target:p}, hooked {hooked:#x}), its presents are not seen");
-        publish_hook_state(*step, 0, true);
-        return;
+        MISMATCH_SEEN.store(true, Ordering::Relaxed);
+        publish_hook_state(*step);
+        return false;
     }
     if matches!(*step, HookStep::Enabled | HookStep::Failed) {
-        return;
+        return *step == HookStep::Enabled;
     }
-    // a thread that could not be suspended is tried again at once, the third failure of a step is final
+    // a failed allocation or page protection is tried again at once, the third failure of a step is final. minhook
+    // skips a thread it cannot suspend without an error, that case never gets here
     while !matches!(*step, HookStep::Enabled | HookStep::Failed) {
         if let HookStep::Uninstalled { .. } = *step {
             let created = if injected_failure("create") {
@@ -176,7 +203,9 @@ pub(crate) unsafe fn hook_present_of(swap_chain: *mut c_void) {
     }
     let install_us = started.elapsed().as_micros() as u64;
     debug_print!("render: Present1 hook {:?} after {install_us} us", *step);
-    publish_hook_state(*step, install_us, false);
+    INSTALL_US.store(install_us, Ordering::Relaxed);
+    publish_hook_state(*step);
+    *step == HookStep::Enabled
 }
 
 fn attach() {
@@ -282,6 +311,21 @@ mod hook_step_tests {
         assert_eq!(created.after(false), HookStep::Created { attempts: 1 });
         assert_eq!(created.after(false).after(true), HookStep::Enabled);
         assert_eq!(created.after(false).after(false).after(false), HookStep::Failed);
+    }
+
+    #[test]
+    fn the_state_word_keeps_every_field() {
+        let word = super::pack_hook_state(HookStep::Enabled, true, 34_015, 3, 7);
+        assert_eq!(word & 0xF, super::HOOK_READY);
+        assert_eq!(word & super::HOOK_MISMATCH, super::HOOK_MISMATCH);
+        assert_eq!((word >> 8) & 0xFF_FFFF, 34_015);
+        assert_eq!((word >> 32) & 0xFFFF, 3);
+        assert_eq!(word >> 48, 7);
+        // saturates instead of spilling into the next field
+        let big = super::pack_hook_state(HookStep::Failed, false, u64::MAX, u64::MAX, u64::MAX);
+        assert_eq!(big & 0xF, super::HOOK_FAILED);
+        assert_eq!((big >> 8) & 0xFF_FFFF, 0xFF_FFFF);
+        assert_eq!((big >> 32) & 0xFFFF, 0xFFFF);
     }
 
     #[test]
