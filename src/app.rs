@@ -131,11 +131,13 @@ pub fn render_adapter() -> u64 {
     shared!(render_adapter).map(|field| field.load(Ordering::Relaxed)).unwrap_or(0)
 }
 
-/// the Present1 hook as the gpu process reports it: "off", "waiting" (no chain yet, or a try failed and the next
-/// chain gets another), "ready", "failed" (three tries). mismatch: a chain with another Present1 exists, its frames are
-/// not seen. installUs: what installing it took
+/// the Present1 hook as the gpu process reports it: "off" (not loaded), "waiting" (no chain has reached it yet),
+/// "ready", "failed" (three tries at the first chain, final). mismatch: a chain with another Present1 was seen and left
+/// as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
 pub fn hook_state() -> serde_json::Value {
-    if !*HOOK_AT_START.get().unwrap_or(&true) {
+    // a bench overrides the setting through the env, like render_hook::load
+    let loaded = modules::bench::hook_override().unwrap_or_else(|| *HOOK_AT_START.get().unwrap_or(&true));
+    if !loaded {
         return serde_json::json!({ "state": "off" });
     }
     let raw = shared!(hook_state).map(|field| field.load(Ordering::Acquire)).unwrap_or(0);
@@ -144,7 +146,13 @@ pub fn hook_state() -> serde_json::Value {
         2 => "failed",
         _ => "waiting",
     };
-    serde_json::json!({ "state": state, "mismatch": raw & 16 != 0, "installUs": raw >> 8 })
+    serde_json::json!({
+        "state": state,
+        "mismatch": raw & 16 != 0,
+        "installUs": (raw >> 8) & 0xFF_FFFF,
+        "modifiedChains": (raw >> 32) & 0xFFFF,
+        "stockChains": raw >> 48,
+    })
 }
 
 // (fps, frame_ns) from the present hook
