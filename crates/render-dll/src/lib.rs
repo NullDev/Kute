@@ -2,11 +2,7 @@ use minhook::MinHook;
 use std::{ffi::c_void, mem, sync::atomic::Ordering};
 use windows::Win32::{
     Foundation::*,
-    Graphics::{
-        Direct3D::*,
-        Direct3D11::*,
-        Dxgi::{Common::*, *},
-    },
+    Graphics::Dxgi::*,
     System::{
         Memory::*,
         SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
@@ -42,53 +38,43 @@ use present::*;
 use shared::*;
 use swapchain::*;
 
-fn get_idxgi() -> Result<(IDXGIFactory2, IDXGISwapChain1)> {
+// the Present1 hook goes on the first swap chain chromium creates, from inside the creation hook. the dummy D3D11
+// device and 1x1 composition chain that used to give the vtable at attach time cost a tenth of a core and stalls of
+// 50 to 140 ms for the whole life of the gpu process on a starved cpu (two e-cores: slowest frames 9 to 21 ms, worst
+// 20 to 140 ms), hooks or no hooks, and that was the laptop problem
+static PRESENT_HOOKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) unsafe fn hook_present_of(swap_chain: *mut c_void) {
+    if PRESENT_HOOKED.swap(true, Ordering::AcqRel) {
+        return;
+    }
     unsafe {
-        // dummy factory + swap chain, only for the vtables
-        let mut device: Option<ID3D11Device> = None;
-
-        D3D11CreateDevice(
-            None,
-            D3D_DRIVER_TYPE_HARDWARE,
-            HMODULE::default(),
-            D3D11_CREATE_DEVICE_SINGLETHREADED,
-            Some(&[D3D_FEATURE_LEVEL_11_0]),
-            D3D11_SDK_VERSION,
-            Some(&mut device),
-            None,
-            None,
-        )?;
-
-        let device = device.unwrap();
-
-        let dxgi_device: IDXGIDevice = device.cast()?;
-        let dxgi_adapter: IDXGIAdapter = dxgi_device.GetAdapter()?;
-        let factory: IDXGIFactory2 = dxgi_adapter.GetParent()?;
-
-        let swap_chain: IDXGISwapChain1 = factory.CreateSwapChainForComposition(
-            &dxgi_device,
-            &DXGI_SWAP_CHAIN_DESC1 {
-                Width: 1,
-                Height: 1,
-                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                Stereo: BOOL(0),
-                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
-                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                BufferCount: 2,
-                Scaling: DXGI_SCALING_STRETCH,
-                SwapEffect: DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
-                AlphaMode: DXGI_ALPHA_MODE_PREMULTIPLIED,
-                Flags: 0,
-            },
-            None,
-        )?;
-
-        Ok((factory, swap_chain))
+        let chain = IDXGISwapChain1::from_raw_borrowed(&swap_chain).unwrap();
+        let original_present = match MinHook::create_hook(chain.vtable().Present1 as *mut c_void, present_hk as *mut c_void) {
+            Ok(trampoline) => trampoline,
+            Err(_e) => {
+                debug_print!("render: Present1 hook failed: {_e:?}");
+                return;
+            }
+        };
+        // stored before enabling, a present in between would find None
+        #[allow(clippy::missing_transmute_annotations)]
+        {
+            ORIGINAL_PRESENT = mem::transmute(original_present);
+        }
+        match MinHook::enable_hook(chain.vtable().Present1 as *mut c_void) {
+            Ok(()) => debug_print!("render: Present1 hook enabled on the first swap chain"),
+            Err(_e) => debug_print!("render: cannot enable the Present1 hook: {_e:?}"),
+        }
     }
 }
 
 fn attach() {
     debug_print!("render: attach started, pid={}", unsafe { GetCurrentProcessId() });
+    // KUTE_HOOK_DETACH=1: bench knob, the dll is loaded and nothing else happens
+    if crate::swapchain::knob("KUTE_HOOK_DETACH", 0) == 1 {
+        return;
+    }
     unsafe {
         capture::capture_init();
         // bench runs (src/modules/bench.rs) use their own mapping
@@ -106,12 +92,11 @@ fn attach() {
             }
             Err(_error) => (),
         }
-        debug_print!("render: creating dummy D3D11 objects for hook discovery");
-        let (factory, swap_chain) = get_idxgi().unwrap_or_else(|e| {
-            debug_print!("Failed to get factory and swap chain: {:?}", e);
-            panic!("Failed to get factory and swap chain");
+        // a factory without a device gives the creation vtable, chromium's device never sees a second one
+        let factory: IDXGIFactory2 = CreateDXGIFactory1().unwrap_or_else(|e| {
+            debug_print!("render: CreateDXGIFactory1 failed: {e:?}");
+            panic!("CreateDXGIFactory1 failed")
         });
-
         let original_create_swapchain = MinHook::create_hook(
             factory.vtable().CreateSwapChainForComposition as *mut c_void,
             create_swapchain_hk as *mut c_void,
@@ -121,18 +106,10 @@ fn attach() {
             panic!("CreateSwapChainForComposition hook failed")
         });
         debug_print!("render: swap-chain hook created, trampoline={original_create_swapchain:p}");
-
-        let original_present = MinHook::create_hook(swap_chain.vtable().Present1 as *mut c_void, present_hk as *mut c_void).unwrap_or_else(|e| {
-            debug_print!("render: Present1 hook failed: {e:?}");
-            panic!("Present1 hook failed")
-        });
-        debug_print!("render: Present1 hook created, trampoline={original_present:p}");
-
-        // store trampolines before enabling, a call in between would find None
+        // stored before enabling, a call in between would find None
         #[allow(clippy::missing_transmute_annotations)]
         {
             ORIGINAL_CREATE_SWAPCHAIN = mem::transmute(original_create_swapchain);
-            ORIGINAL_PRESENT = mem::transmute(original_present);
         }
         match MinHook::enable_all_hooks() {
             Ok(()) => debug_print!("render: all MinHook hooks enabled"),

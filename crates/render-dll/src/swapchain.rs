@@ -63,6 +63,14 @@ pub(crate) fn is_main_swapchain(swapchain: *mut c_void) -> bool {
 pub(crate) static TEARING_SUPPORTED: AtomicBool = AtomicBool::new(false);
 
 // same check as chromium's DXGISwapChainTearingSupported, cached
+pub(crate) fn knob(name: &str, default: u32) -> u32 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .filter(|&value| value > 0)
+        .unwrap_or(default)
+}
+
 unsafe fn tearing_supported(factory: *mut c_void) -> bool {
     static CHECKED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let supported = *CHECKED.get_or_init(|| unsafe {
@@ -93,6 +101,9 @@ unsafe fn create_swapchain_unmodified(
     unsafe {
         let original_fn = ORIGINAL_CREATE_SWAPCHAIN.unwrap();
         let result = original_fn(this, pdevice, pdesc, prestricttooutput, ppswapchain);
+        if result.is_ok() && !ppswapchain.is_null() {
+            crate::hook_present_of(*ppswapchain);
+        }
 
         // a new chain can reuse a dead one's address, drop its stale wait handle
         if result.is_ok() && !ppswapchain.is_null() && WAIT_HANDLE.write().unwrap().remove(&(*ppswapchain as usize)).is_some() {
@@ -125,10 +136,16 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
             (*pdesc).Format.0,
             (*pdesc).Flags
         );
+        // KUTE_HOOK_STOCKCHAIN=1: bench knob, chromium's own chain untouched (no latency, no wait handle), the
+        // present hook then only detours. KUTE_HOOK_NOMMCSS=1 skips the "Games" thread characteristics
+        if knob("KUTE_HOOK_STOCKCHAIN", 0) == 1 {
+            return create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain);
+        }
         let mut desc = *pdesc;
         // no SHADER_INPUT, it costs 25-50% of the uncapped present rate and nothing needs it
         desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        desc.BufferCount = 2;
+        // KUTE_HOOK_BUFFERS and KUTE_HOOK_LATENCY: bench knobs to bisect the hook's cost on a starved cpu, not settings
+        desc.BufferCount = knob("KUTE_HOOK_BUFFERS", 2);
         desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL; // discard crashes
         desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
         // DXGI_SCALING_NONE crashes
@@ -146,6 +163,7 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
             create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain)
         } else {
             debug_print!("render: swap chain created pointer={:?}", *ppswapchain);
+            crate::hook_present_of(*ppswapchain);
             let swap_chain = IDXGISwapChain1::from_raw(*ppswapchain);
             // capture needs the real device
             let device = match swap_chain.GetDevice::<ID3D11Device>() {
@@ -173,7 +191,7 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
             capture::capture_on_swapchain(*ppswapchain, device);
             if let Ok(swap_chain2) = swap_chain.cast::<IDXGISwapChain2>() {
                 swap_chain2
-                    .SetMaximumFrameLatency(1)
+                    .SetMaximumFrameLatency(knob("KUTE_HOOK_LATENCY", 1))
                     .unwrap_or_else(|e| debug_print!("Failed to set latency: {:?}", e));
                 // depth 1 is what the pacing relies on
                 debug_print!("render: frame latency now {:?}", swap_chain2.GetMaximumFrameLatency());
