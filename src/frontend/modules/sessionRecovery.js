@@ -5,13 +5,13 @@ const TOKEN_KEY = "krunker_token";
 const HANG_RELOADS_KEY = "kute_hang_reloads";
 // in a row without a lobby in between, more is not this bug
 const MAX_HANG_RELOADS = 2;
-// a normal load has its lobby about a second after the anonymous frvr login
-const HANG_MS = 4000;
+// a normal load has its lobby within a second of the anonymous frvr login, a false alarm costs one page load
+const HANG_MS = 1500;
 const GIVE_UP_MS = 90000;
 const POLL_MS = 1000;
 
 // not location.reload(), rejoining the ?game= lobby every time fills it ("Game is Full")
-function restart(){
+export function restart(){
     location.assign("https://krunker.io/");
 }
 

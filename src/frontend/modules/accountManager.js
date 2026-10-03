@@ -1,6 +1,7 @@
 import { kute } from "../client.js";
 import { getElement, getInput, checkCompMode, request } from "../utils.js";
 import { confirmPopup } from "./confirmPopup.js";
+import { restart } from "./sessionRecovery.js";
 
 /**
  * host keeps the credentials, the page only ever gets names and colors
@@ -483,6 +484,7 @@ class AccountManager {
         if (localStorage.getItem("krunker_token") !== null){
             sessionStorage.setItem(SWITCH_KEY, JSON.stringify({ username: account.username, at: Date.now() }));
             window.logoutAcc();
+            restart();
             return;
         }
         window.loginOrRegister();
