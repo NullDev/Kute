@@ -233,6 +233,7 @@ pub fn finish(page_json: &str) {
         },
         "page": page,
         "present": present,
+        "hook": if config.hook { app::hook_state() } else { serde_json::Value::Null },
         "cpu": cpu,
     });
     debug_print!("bench: {result}");
