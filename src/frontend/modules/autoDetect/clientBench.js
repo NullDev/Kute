@@ -57,9 +57,9 @@ export function currentPipeline(){
  */
 function keptFor(setting, current){
     if (setting !== "hardFlip" || !current.hardFlip) return null;
-    // both live in the hook, faster frames are no reason to break them
+    // the capture lives in the hook, faster frames are no reason to break it. the present fps counter only loses its
+    // second number without the hook, the game's own stays (renderFps.js says so once)
     if (kute.settings.data.obsCapturePlugin === true) return "kept, OBS capture needs it";
-    if (kute.settings.data.renderStats === true) return "kept, the FPS counter needs it";
     return null;
 }
 
