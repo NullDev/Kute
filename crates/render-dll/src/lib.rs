@@ -46,8 +46,8 @@ use swapchain::*;
 // device and 1x1 composition chain that used to give the vtable at attach time cost a tenth of a core and stalls of
 // 50 to 140 ms for the whole life of the gpu process on a starved cpu (two e-cores: slowest frames 9 to 21 ms, worst
 // 20 to 140 ms), hooks or no hooks, and that was the laptop problem
-/// where the Present1 hook stands. the first version set one flag before anything had succeeded, so a failed
-/// create or enable was final and invisible, with the chains still being modified for a hook that never ran
+// where the Present1 hook stands. the first version set one flag before anything had succeeded, so a failed
+// create or enable was final and invisible, with the chains still being modified for a hook that never ran
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HookStep {
     Uninstalled { attempts: u32 },
@@ -96,8 +96,8 @@ pub(crate) fn present_hook_failed() -> bool {
     *PRESENT_HOOK.lock().unwrap() == HookStep::Failed
 }
 
-/// the host decodes this in app.rs: low byte state, bit 4 mismatch, bits 8 to 31 install microseconds, bits 32 to 47
-/// modified chains, bits 48 and up stock chains
+// the host decodes this in app.rs: low byte state, bit 4 mismatch, bits 8 to 31 install microseconds, bits 32 to 47
+// modified chains, bits 48 and up stock chains
 pub(crate) fn pack_hook_state(step: HookStep, mismatch: bool, install_us: u64, modified: u64, stock: u64) -> u64 {
     step.code() | if mismatch { HOOK_MISMATCH } else { 0 } | (install_us.min(0xFF_FFFF) << 8) | (modified.min(0xFFFF) << 32) | (stock.min(0xFFFF) << 48)
 }
@@ -117,7 +117,7 @@ fn publish_hook_state(step: HookStep) {
     unsafe { shared!(ptr, hook_state).store(value, Ordering::Release) };
 }
 
-/// counts a chain handed to chromium, so a bench result can show whether chains got prepared while the hook was down
+// counts a chain handed to chromium, so a bench result can show whether chains got prepared while the hook was down
 pub(crate) fn note_chain(modified: bool) {
     if modified { &MODIFIED_CHAINS } else { &STOCK_CHAINS }.fetch_add(1, Ordering::Relaxed);
     publish_hook_state(*PRESENT_HOOK.lock().unwrap());
@@ -144,9 +144,9 @@ fn injected_failure(step: &str) -> bool {
     }
 }
 
-/// installs the Present1 hook from this chain's vtable, once, with the step and its outcome published to the host.
-/// called for every chain chromium creates: later ones only check that their Present1 is the hooked one. returns
-/// whether this chain's presents reach the hook, the caller leaves a chain that they do not as chromium made it
+// installs the Present1 hook from this chain's vtable, once, with the step and its outcome published to the host.
+// called for every chain chromium creates: later ones only check that their Present1 is the hooked one. returns
+// whether this chain's presents reach the hook, the caller leaves a chain that they do not as chromium made it
 pub(crate) unsafe fn hook_present_of(swap_chain: *mut c_void) -> bool {
     let started = std::time::Instant::now();
     let mut step = PRESENT_HOOK.lock().unwrap();
