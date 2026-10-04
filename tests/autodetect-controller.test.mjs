@@ -59,10 +59,10 @@ function recorded(fastCount, slowCount, slowGap){
  * @param {Case} options
  * @return {Promise<{result: any, client: Record<string, any>, game: Record<string, string>}>} what the run returned and left behind
  */
-async function run({ read, cap = 500, hz = 60, mobile = true, quality = false, carry, cancelAt, presentMs }){
+async function run({ read, cap = 500, hz = 60, mobile = true, quality = false, carry, cancelAt, presentMs, running = { hardFlip: true } }){
     let clock = 0;
     let phase = "";
-    const pipeline = { hardFlip: true };
+    const pipeline = { ...running };
     /** @type {Record<string, any>} */
     const client = { gameFpsLimit: cap, throttle: 1, ...pipeline };
     /** @type {Record<string, string>} */
@@ -135,7 +135,7 @@ async function run({ read, cap = 500, hz = 60, mobile = true, quality = false, c
         choose(){},
     };
     const result = await instance.run(panel, state, { inMatch: false });
-    return { result, client, game: gameValues };
+    return { result, client, game: gameValues, state };
 }
 
 /**
@@ -286,11 +286,19 @@ describe("after the restart for a new client setup", () => {
         elapsedMs: 0,
     };
 
-    test("a setup that is slower in the game goes back", async() => {
-        const { result, client } = await run({ cap: 0, carry, read: () => reading(100) });
-        expect(result.report.rolledBack).toMatch(/The setup that won the client test measured worse than yours/);
+    test("a setup that is slower in the game goes back, and the limits still get their turn", async() => {
+        // the first version ended the run here: a laptop whose client test winner lost in the game never got a limit tested
+        const { result, client, state } = await run({ cap: 0, carry, read: () => reading(100) });
+        expect(result).toBe("restarting");
         expect(client.hardFlip).toBe(false);
-        expect(result.summary.needsRestart).toBe(true);
+        expect(state.carry.pipelineRefused).toMatch(/The setup that won the client test measured worse than yours/);
+        expect(state.carry.recheck.length).toBe(2);
+        // the second restart runs the player's own setup again
+        const again = await run({ cap: 0, carry: state.carry, running: { hardFlip: false }, read: ({ cap }) => (cap === 120 ? { ...reading(120), taskP99: 2 } : reading(cap || 500)) });
+        expect(again.result.report.rolledBack).toBe(null);
+        expect(again.result.report.pipelineRefused).toMatch(/measured worse than yours/);
+        expect(again.client.hardFlip).toBe(false);
+        expect(again.result.report.caps.some((row) => row.where === "test match")).toBe(true);
     });
 
     test("a setup that cannot be measured goes back", async() => {
