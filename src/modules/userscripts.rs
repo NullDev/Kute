@@ -11,6 +11,9 @@ pub const GROUPS: [(&str, &str, &str, &str); 2] = [
     ("social", "social", "Social", "social / hub popups"),
 ];
 
+// examples that ship with the exe, copied into scripts/ once and switched off, so players can read them and turn them on
+const SHIPPED: &[(&str, &str)] = &[("classRoulette.js", include_str!("../../resources/userscripts/classRoulette.js"))];
+
 const MAX_SOURCE: usize = 4 * 1024 * 1024;
 // enough for the header in the manager's list
 const HEADER_READ: u64 = 64 * 1024;
@@ -110,6 +113,35 @@ fn tracker_path() -> PathBuf {
 
 fn prefs_path() -> PathBuf {
     scripts_dir().join("prefs.json")
+}
+
+fn shipped_path() -> PathBuf {
+    scripts_dir().join("shipped.json")
+}
+
+// once per file name: a copy the player edited or deleted stays as they left it
+pub fn seed_shipped() {
+    let mut done = read_json(&shipped_path());
+    let mut changed = false;
+    for (file, source) in SHIPPED {
+        if done.contains_key(*file) {
+            continue;
+        }
+        let path = scripts_dir().join(file);
+        if !path.exists() {
+            if let Err(e) = fs::create_dir_all(scripts_dir()).and_then(|_| utils::atomic_write(&path, source)) {
+                eprintln!("userscripts: can't write {}: {}", path.display(), e);
+                continue;
+            }
+            set_enabled(file, false);
+        }
+        let version = parse_metadata(source).and_then(|meta| meta.get("version").cloned()).unwrap_or(Value::Bool(true));
+        done.insert((*file).to_string(), version);
+        changed = true;
+    }
+    if changed {
+        write_json(&shipped_path(), &done);
+    }
 }
 
 fn parse_metadata(source: &str) -> Option<Map<String, Value>> {
