@@ -97,6 +97,7 @@ fn main() {
     if let Err(e) = app::init_fs() {
         eprintln!("failed to set all the files in place {}", e);
     }
+    modules::userscripts::seed_shipped();
     // preload the swapper off the IO thread, bench doesn't need it
     if bench.is_none() {
         std::thread::spawn(|| {
