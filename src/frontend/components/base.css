@@ -19,6 +19,11 @@
 	z-index: 9;
 }
 
+/* season 10 menu puts the class card over krunker's own spot (bottom 225px), this band is free in both menus */
+#teamSelector {
+	bottom: 290px !important;
+}
+
 div #setHed_local,
 .kuteSettings .setHed:first-of-type {
 	margin-top: 10px;
