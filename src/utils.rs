@@ -117,6 +117,15 @@ pub fn config<T: serde::de::DeserializeOwned>(setting: &str, default: T) -> T {
     CONFIG.lock().unwrap().get(setting).unwrap_or(default)
 }
 
+// subprocesses only: their CONFIG is a copy from process start, and a page reload keeps the renderer process
+pub fn config_on_disk<T: serde::de::DeserializeOwned>(setting: &str, default: T) -> T {
+    std::fs::read_to_string(settings_dir().join("settings.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|mut settings| serde_json::from_value(settings[setting].take()).ok())
+        .unwrap_or(default)
+}
+
 // None for the browser process
 pub fn process_type() -> Option<String> {
     env::args().find_map(|arg| arg.strip_prefix("--type=").map(str::to_string))
