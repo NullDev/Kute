@@ -61,7 +61,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Hardpoint enemy counter
 - [x] Nuke counter: your career nuke total in game, with an optional goal
 - [x] Keystrokes: your bound movement keys and mouse in the HUD, lit while pressed, with a ring that shows which way the mouse moves
-- [x] HUD editor: drag, resize and hide every in-game HUD element, snapping included
+- [x] HUD editor: drag, resize and hide every in-game HUD element and the menu timer, snapping included
 - [x] Rank progress
 - [x] Clan colors
 - [x] Kute badge (one setting turns off every Kute online feature, nothing is sent then)
