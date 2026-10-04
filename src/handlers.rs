@@ -136,6 +136,24 @@ wrap_request_handler! {
     struct KuteRequestHandler;
 
     impl RequestHandler {
+        fn on_before_browse(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            _request: Option<&mut Request>,
+            _user_gesture: ::std::os::raw::c_int,
+            _is_redirect: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int {
+            // before the page asks for its files, so a swap dropped into the folder applies on a plain reload
+            if let (Some(browser), Some(frame)) = (browser, frame)
+                && browser.is_popup() == 0
+                && frame.is_main() != 0
+            {
+                modules::swapper::rescan();
+            }
+            0
+        }
+
         fn resource_request_handler(
             &self,
             _browser: Option<&mut Browser>,

@@ -1,4 +1,4 @@
-use crate::{constants, debug_print, modules, utils, utils::config};
+use crate::{constants, debug_print, modules, utils};
 use cef::{rc::*, *};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -56,7 +56,8 @@ const CUSTOM_CSS_KEY: &str = "__kuteCustomCss";
 // runs before any page script. popups get theirs from handlers::on_after_created
 fn inject_scripts(url: &str, context: &V8Context) {
     debug_print!("renderer: injecting into {url}");
-    let registry = if config("userscripts", true) {
+    // from disk: the toggle in settings only needs a page refresh this way
+    let registry = if utils::config_on_disk("userscripts", true) {
         v8_value_create_object(None, None)
     } else {
         None
