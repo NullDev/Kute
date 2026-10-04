@@ -362,7 +362,7 @@
         "defaultValue": true,
         "button": "Manage",
         "buttonAction": "{{kute}}.userscriptManager.open()",
-        "needsRestart": true
+        "needsRefresh": true
     },
     "blocklist": {
         "name": "URL Blocklist",
