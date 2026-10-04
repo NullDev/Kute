@@ -15,6 +15,17 @@ export function restart(){
     location.assign("https://krunker.io/");
 }
 
+let holdUntil = 0;
+
+/**
+ * a logout the account manager asked for is no reason to leave the page
+ *
+ * @param {number} ms
+ */
+export function holdRestart(ms){
+    holdUntil = Date.now() + ms;
+}
+
 /**
  * @return {boolean}
  */
@@ -73,7 +84,7 @@ function watchForLogout(){
             return;
         }
         const now = localStorage.getItem(TOKEN_KEY) !== null;
-        if (signedIn && !now){
+        if (signedIn && !now && Date.now() > holdUntil){
             loggedOut = true;
             console.log("[kute] session: logged out, reloading");
         }

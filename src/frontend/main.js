@@ -180,6 +180,8 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/nukeCounter.js");
         // always: customize button needs it, host needs icon url changes
         import("./modules/kuteIcons/index.js");
+        // always: the hud editor toggles it, and measures the timer on the menu right after, so this comes first
+        import("./modules/menuTimer.js");
         // always: applies saved HUD layout, editor loads lazily
         import("./modules/hudEditor/index.js");
         if (kute?.settings?.data?.hsSound) import("./modules/hsSound.js");
@@ -266,15 +268,6 @@ Object.defineProperty(window, "gameLoaded", {
             textSelectCSS.id = "kute_textSelectCSS";
             textSelectCSS.textContent = "#chatHolder * { user-select: text }";
             document.head.append(textSelectCSS);
-        }
-
-        if (kute?.settings.data?.menuTimer){
-            import("./components/menuTimer.css").then((module) => {
-                const menuTimerCSS = document.createElement("style");
-                menuTimerCSS.id = "kute_menuTimerCSS";
-                menuTimerCSS.textContent = module.default;
-                document.head.append(menuTimerCSS);
-            });
         }
     },
 });

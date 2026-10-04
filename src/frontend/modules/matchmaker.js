@@ -2,6 +2,7 @@ import styles from "../components/matchmaker.css";
 import { kute } from "../client.js";
 import { request } from "../utils.js";
 import { matches } from "./hotkeys.js";
+import { OFFICIAL_MAPS, mapImageUrl } from "./maps.js";
 
 // ---
 // ported from the Krunker Civilian Client (GPL-3.0) <3
@@ -27,15 +28,6 @@ const REGIONS = {
     SIN: "Singapore", DAL: "Dallas", BHN: "Bahrain", BRZ: "Brazil", NY: "New York",
 };
 
-// index = preview image number on assets.krunker.io, same order as gapi.svc.krunker.io/maps
-const MAP_ICONS = [
-    "Burg", "Littletown", "Sandstorm", "Subzero", "Undergrowth", "Shipment", "Freight", "Lostworld", "Citadel", "Oasis",
-    "Kanji", "Industry", "Lumber", "Evacuation", "Site", "SkyTemple", "Lagoon", "Bureau", "Tortuga", "Tropicano",
-    "Krunk_Plaza", "Arena", "Habitat", "Atomic", "Old_Burg", "Throwback", "Stockade", "Facility", "Clockwork", "Laboratory",
-    "Shipyard", "Soul Sanctum", "Bazaar", "Erupt", "HQ", "Khepri", "Lush", "Vivo", "Slide Moonlight", "Eterno Simulator",
-    "Stalk Factory", "Eterno Jump", "Frontier", "Bastion", "Piazza", "Barnyard",
-];
-
 // official maps. none picked means all of these, keeps community maps out
 const MAP_FILTER = [
     "Burg", "Littletown", "Sandstorm", "Subzero", "Undergrowth", "Freight", "Lostworld", "Citadel", "Oasis", "Kanji",
@@ -55,7 +47,7 @@ const MAP_NAMES = { SkyTemple: "Sky Temple", Krunk_Plaza: "Krunk Plaza", Old_Bur
  */
 const normalizeMap = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-const MAP_ICON_BY_NAME = new Map(MAP_ICONS.map((name, index) => [normalizeMap(name), index]));
+const MAP_ICON_BY_NAME = new Map(OFFICIAL_MAPS.map((name, index) => [normalizeMap(name), index]));
 
 const DEFAULT_MAPS = new Set(MAP_FILTER.map(normalizeMap));
 // parkour maps have no round timer. untimed on any other map = custom game
@@ -124,7 +116,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 function mapIconUrl(map){
     const index = MAP_ICON_BY_NAME.get(normalizeMap(map));
-    return index === undefined ? null : `https://assets.krunker.io/img/maps/map_${index}.png`;
+    return index === undefined ? null : mapImageUrl(index);
 }
 
 /**

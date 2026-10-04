@@ -128,6 +128,7 @@ declare var createPrivateRoom: () => void;
 declare var setSetting: (key: string, value: any) => void;
 declare var loginOrRegister: () => void;
 declare var logoutAcc: () => void;
+declare var FRVR: { auth: { isLoggedIn: () => boolean, loginAsAnonymous: () => Promise<unknown>, logout: () => unknown, getCurrentPlatform: () => string } } | undefined;
 declare var playSelect: (volume?: number) => void;
 declare var openServerWindow: (tab: number) => void;
 declare var switchChat: (element: Element | null) => void;
