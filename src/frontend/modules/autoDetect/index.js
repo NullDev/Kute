@@ -104,6 +104,7 @@ const WORSE = {
  * @property {import("./decide.js").QualityPlan} plan
  * @property {import("./sample.js").InputDiagnostics} [input] whether the host's input script reached the game
  * @property {string|null} rolledBack why the run put the player's settings back, null when it did not
+ * @property {string|null} [pipelineRefused] why the setup from the client test went back in the game while the run went on
  * @property {number} seconds
  */
 
@@ -130,6 +131,9 @@ const WORSE = {
  * @property {number[]} capOrder caps worth trying in the match, best in the client test first
  * @property {number} elapsedMs
  * @property {boolean} [resumed] the run already continued once after its restart, a second time would be a loop
+ * @property {string} [pipelineRefused] why the setup from the client test went back after its restart. the run
+ *     restarts once more on the player's own setup and the limits get their turn there
+ * @property {Reading[]} [recheck] the readings that refused it
  */
 
 /**
@@ -506,7 +510,7 @@ function advancedHtml(report){
     // reading order: the pc and the result, then the client test, then the test match
     const cards = [
         section("This PC", `<p><b>${report.gpu}</b><br><b>${report.cpu}</b>${report.laptop ? " (laptop)" : ""}, ${report.hz} Hz${report.powerOverlay ? `, Windows power mode: ${report.powerOverlay}` : ""}.${graphics}</p>
-            ${capacity}${report.rolledBack ? `<p class="adWarn">${report.rolledBack}</p>` : ""}${inputLine(report.input)}${flood}`),
+            ${capacity}${report.rolledBack ? `<p class="adWarn">${report.rolledBack}</p>` : ""}${report.pipelineRefused ? `<p class="adWarn">${report.pipelineRefused}</p>` : ""}${inputLine(report.input)}${flood}`),
         section("Before and after", `${table(`<th></th>${metricsHead}`, [
             `<tr><td>Before (${capName(report.beforeCap)})</td>${metricCells(report.before)}</tr>`,
             report.after ? `<tr><td>After (${capName(report.afterCap)})</td>${metricCells(report.after)}</tr>` : "",
@@ -1253,6 +1257,8 @@ class AutoDetect {
             plan: decide({ capacity: fpsOf(run.uncapped), hz, headroom: 1, halfResolutionGain: null, settings: [] }),
             input: takeInputDiagnostics(),
             rolledBack: null,
+            pipelineRefused: run.pipelineRefused ?? null,
+            recheck: run.recheck ?? [],
             seconds: (performance.now() - started) / 1000,
             ...fields,
         });
@@ -1291,7 +1297,7 @@ class AutoDetect {
         /** @type {string[]} */
         const details = [...earlier];
         if (throttleBefore > 1) details.push(`<b>CPU Throttling</b>: ${throttleBefore} → off (it slows the game down on purpose, the result is checked against how the game ran with it)`);
-        if (resumed && run.pipelineChanged){
+        if (resumed && run.pipelineChanged && !run.pipelineRefused){
             panel.progress("Checking the new setup in the game", 0.5);
             // at the limit the player plays with, against the readings from before the restart. without a limit a PC
             // that collapses there would compare two collapses
@@ -1303,7 +1309,26 @@ class AutoDetect {
             // a player whose own setup does not run steadily gives nothing to compare here: the last check judges
             // the new setup together with the limit that makes it steady
             const worse = unsteady(run.asPlayed, originalCap) && unsteady(playedNow, originalCap) ? null : refused(run.asPlayed, playedNow, originalCap);
-            if (worse) return rollBack(worse.replace("The new settings", "The setup that won the client test"), recheck);
+            // a result that could not be measured at all (the window left the front) ends the run, a measured loss
+            // only ends the new setup
+            if (worse && accept(run.asPlayed, playedNow, { capBefore: originalCap, capAfter: originalCap, trade }).failed === "result") return rollBack(worse.replace("The new settings", "The setup that won the client test"), recheck);
+            if (worse){
+                // back to the player's own setup with one more restart, the limits get their turn on it. the run used to
+                // end here, and a laptop whose client test winner lost in the game never got a limit tested
+                for (const entry of PIPELINE){
+                    if (run.pipelineAfter[entry.setting] !== run.pipelineBefore[entry.setting]) applyClient(entry.setting, run.pipelineBefore[entry.setting]);
+                }
+                if (frameCapBefore > 0) game.write(game.GAME_FRAME_CAP, String(frameCapBefore));
+                if (appliedCap !== fpsLimitBefore) applyClient("gameFpsLimit", fpsLimitBefore);
+                state.carry = { ...run, pipelineRefused: worse.replace("The new settings", "The setup that won the client test"), ...recheck, elapsedMs: performance.now() - started, resumed: false };
+                writeState(state);
+                document.exitPointerLock();
+                panel.choose("Kute restarts once more", "The setup from the client test ran worse in the game, so Kute goes back to yours and tests the FPS limits on it.", []);
+                await sleep(3500);
+                if (this.cancelled) return null;
+                window.chrome.webview.postMessage("restart");
+                return "restarting";
+            }
             const winnerRow = run.rows.find((row) => PIPELINE.every((entry) => row.pipeline[entry.setting] === run.pipelineAfter[entry.setting]));
             const reason = winnerRow ? because(run.decidedBy, summarize(run.rows[0].readings), summarize(winnerRow.readings)) : "measured better";
             for (const entry of PIPELINE){
