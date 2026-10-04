@@ -27,12 +27,13 @@ const REGIONS = {
     SIN: "Singapore", DAL: "Dallas", BHN: "Bahrain", BRZ: "Brazil", NY: "New York",
 };
 
-// index = preview image number on assets.krunker.io
+// index = preview image number on assets.krunker.io, same order as gapi.svc.krunker.io/maps
 const MAP_ICONS = [
     "Burg", "Littletown", "Sandstorm", "Subzero", "Undergrowth", "Shipment", "Freight", "Lostworld", "Citadel", "Oasis",
     "Kanji", "Industry", "Lumber", "Evacuation", "Site", "SkyTemple", "Lagoon", "Bureau", "Tortuga", "Tropicano",
     "Krunk_Plaza", "Arena", "Habitat", "Atomic", "Old_Burg", "Throwback", "Stockade", "Facility", "Clockwork", "Laboratory",
     "Shipyard", "Soul Sanctum", "Bazaar", "Erupt", "HQ", "Khepri", "Lush", "Vivo", "Slide Moonlight", "Eterno Simulator",
+    "Stalk Factory", "Eterno Jump", "Frontier", "Bastion", "Piazza", "Barnyard",
 ];
 
 // official maps. none picked means all of these, keeps community maps out
@@ -40,7 +41,7 @@ const MAP_FILTER = [
     "Burg", "Littletown", "Sandstorm", "Subzero", "Undergrowth", "Freight", "Lostworld", "Citadel", "Oasis", "Kanji",
     "Industry", "Lumber", "Evacuation", "Site", "SkyTemple", "Lagoon", "Tropicano", "Habitat", "Atomic", "Old_Burg",
     "Throwback", "Clockwork", "Bazaar", "Erupt", "HQ", "Lush", "Vivo", "Slide Moonlight", "Eterno Simulator", "Eterno Jump",
-    "Frontier",
+    "Frontier", "Piazza", "Barnyard",
 ];
 
 /** @type {Record<string, string>} */
@@ -55,9 +56,6 @@ const MAP_NAMES = { SkyTemple: "Sky Temple", Krunk_Plaza: "Krunk Plaza", Old_Bur
 const normalizeMap = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const MAP_ICON_BY_NAME = new Map(MAP_ICONS.map((name, index) => [normalizeMap(name), index]));
-// newer maps, their images come after the list
-MAP_ICON_BY_NAME.set(normalizeMap("Eterno Jump"), 41);
-MAP_ICON_BY_NAME.set(normalizeMap("Frontier"), 42);
 
 const DEFAULT_MAPS = new Set(MAP_FILTER.map(normalizeMap));
 // parkour maps have no round timer. untimed on any other map = custom game

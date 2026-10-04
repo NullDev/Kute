@@ -131,9 +131,9 @@ pub fn render_adapter() -> u64 {
     shared!(render_adapter).map(|field| field.load(Ordering::Relaxed)).unwrap_or(0)
 }
 
-/// the Present1 hook as the gpu process reports it: "off" (not loaded), "waiting" (no chain has reached it yet),
-/// "ready", "failed" (three tries at the first chain, final). mismatch: a chain with another Present1 was seen and left
-/// as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
+// the Present1 hook as the gpu process reports it: "off" (not loaded), "waiting" (no chain has reached it yet),
+// "ready", "failed" (three tries at the first chain, final). mismatch: a chain with another Present1 was seen and left
+// as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
 pub fn hook_state() -> serde_json::Value {
     // a bench overrides the setting through the env, like render_hook::load
     let loaded = modules::bench::hook_override().unwrap_or_else(|| *HOOK_AT_START.get().unwrap_or(&true));
@@ -215,7 +215,7 @@ pub fn load_flags() {
     *FLAGS.lock().unwrap() = flags;
 }
 
-/// one libcef patch with a feature switch (patches/README.md), toggled by a setting
+// one libcef patch with a feature switch (patches/README.md), toggled by a setting
 pub struct Patch {
     pub setting: &'static str,
     pub feature: &'static str,
