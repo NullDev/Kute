@@ -100,6 +100,52 @@ class UserscriptManager {
         this.prefsTimers = new Map();
 
         if (registry) registry.onChange = () => this.queueRender();
+        // the checkbox in the settings and the header toggle are the same switch
+        kute.settings.toggleUserscripts = (/** @type {boolean} */ on) => this.onMasterChanged(on);
+    }
+
+    masterOn(){
+        return kute.settings?.data?.userscripts !== false;
+    }
+
+    /**
+     * Userscripts switched on or off, from either toggle. Mirrors the per script toggle for every game script.
+     *
+     * @param {boolean} on
+     */
+    onMasterChanged(on){
+        // changeSetting stores the value after calling this
+        kute.settings.data.userscripts = on;
+        if (!registry){
+            // this page loaded without userscripts, the exe injects them with the next load
+            if (on) this.needsRefresh = true;
+        }
+        else {
+            for (const script of this.groups.filter((group) => group.id === "game").flatMap((group) => group.scripts)){
+                const entry = this.entryFor(script.key);
+                if (!entry) continue;
+                if (on){
+                    if (!script.enabled) continue;
+                    entry.start();
+                    if (entry.tainted || (entry.state !== "running" && entry.state !== "waiting" && entry.state !== "error")) this.needsRefresh = true;
+                }
+                else if ((entry.state === "running" || entry.state === "waiting") && !entry.stop()) this.needsRefresh = true;
+            }
+        }
+        this.updateNotice();
+        if (!this.editing) this.render();
+    }
+
+    applyMaster(){
+        const shadow = this.popup?.shadow;
+        if (!shadow) return;
+        const on = this.masterOn();
+        shadow.querySelector(".managerPopup")?.classList.toggle("scriptsOff", !on);
+        const master = shadow.querySelector("#usMaster");
+        if (!master) return;
+        master.classList.toggle("on", on);
+        master.querySelector(".toggle")?.classList.toggle("on", on);
+        /** @type {HTMLElement} */ (master.querySelector("span")).textContent = on ? "Userscripts on" : "Userscripts off";
     }
 
     open(){
@@ -127,6 +173,8 @@ class UserscriptManager {
         const { shadow } = this.popup;
         /** @type {HTMLElement} */ (shadow.querySelector("#usFolder")).onclick = () => this.send("reveal", {});
         /** @type {HTMLElement} */ (shadow.querySelector("#usRefreshNow")).onclick = () => location.reload();
+        /** @type {HTMLElement} */ (shadow.querySelector("#usMaster")).onclick = () => kute.settings.changeSetting("userscripts", !this.masterOn(), false);
+        this.applyMaster();
         this.body().textContent = "Loading...";
         this.send("list", {});
     }
@@ -208,16 +256,13 @@ class UserscriptManager {
     updateNotice(){
         const notice = /** @type {HTMLElement|null} */ (this.popup?.shadow.querySelector("#usRefresh"));
         if (!notice) return;
-        const off = kute.settings?.data?.userscripts === false;
-        notice.hidden = !this.needsRefresh && !off;
-        /** @type {HTMLElement} */ (notice.querySelector("span")).textContent = off
-            ? "Userscripts are switched off (Settings, Customization). Nothing here runs until they are on again."
-            : "Some changes apply after a page refresh.";
+        notice.hidden = !this.needsRefresh;
     }
 
     render(){
         const body = this.body();
         if (!body || !this.popup) return;
+        this.applyMaster();
         body.textContent = "";
         for (const group of this.groups) body.append(this.renderGroup(group));
     }
@@ -282,6 +327,10 @@ class UserscriptManager {
      */
     stateOf(script, entry, social){
         if (entry?.state === "error") return ["Error", "bad", entry.error];
+        if (!this.masterOn()){
+            if (entry?.state === "running") return ["Until refresh", "warn", "This script has no unload, it stops with the next page load"];
+            return script.enabled ? ["On", "", "Runs once userscripts are on"] : ["Off", "", ""];
+        }
         if (social || !registry) return script.enabled ? ["On", "ok", ""] : ["Off", "", ""];
         if (script.enabled){
             if (entry?.state === "running") return ["Running", "ok", ""];
