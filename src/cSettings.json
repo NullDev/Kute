@@ -204,7 +204,7 @@
     "cleanUI": {
         "name": "Cleaner Menu",
         "id": "cleanUI",
-        "description": "Hides banners, ads and other clutter in the menu",
+        "description": "Hides ads, promos, the Popular Now row and other clutter in the menu",
         "type": "checkbox",
         "category": "Interface",
         "defaultValue": false
@@ -213,15 +213,6 @@
         "name": "Hide Bundle Popups",
         "id": "hideBundles",
         "description": "Stops store bundle popups from showing up outside the store",
-        "type": "checkbox",
-        "category": "Interface",
-        "defaultValue": false
-    },
-    "hidePopularNow": {
-        "name": "Hide Popular Now",
-        "id": "hidePopularNow",
-        "performance": false,
-        "description": "Hides the Popular Now maps row in the menu",
         "type": "checkbox",
         "category": "Interface",
         "defaultValue": false

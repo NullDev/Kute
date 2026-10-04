@@ -79,6 +79,13 @@ document.addEventListener(
         });
 
         ready.then(() => {
+            // hide popular now was merged into the cleaner menu (bundle 0.1.70), carry an enabled one over once
+            if (kute.settings.data.hidePopularNow === true){
+                kute.settings.data.hidePopularNow = false;
+                window.chrome.webview.postMessage("set-config, hidePopularNow, false");
+                kute.settings.data.cleanUI = true;
+                window.chrome.webview.postMessage("set-config, cleanUI, true");
+            }
             if (!kute.settings.data.cleanUI) return;
             import("./components/clean.css").then((css) => {
                 const cleanCSS = document.createElement("style");
@@ -95,16 +102,6 @@ document.addEventListener(
                 classicMenuCSS.id = "kute_classicMenuCSS";
                 classicMenuCSS.textContent = css.default;
                 document.head.append(classicMenuCSS);
-            });
-        });
-
-        ready.then(() => {
-            if (!kute.settings.data.hidePopularNow) return;
-            import("./components/hidePopularNow.css").then((css) => {
-                const hidePopularCSS = document.createElement("style");
-                hidePopularCSS.id = "kute_hidePopularNowCSS";
-                hidePopularCSS.textContent = css.default;
-                document.head.append(hidePopularCSS);
             });
         });
     },
