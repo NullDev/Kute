@@ -12,7 +12,10 @@ pub const GROUPS: [(&str, &str, &str, &str); 2] = [
 ];
 
 // examples that ship with the exe, copied into scripts/ once and switched off, so players can read them and turn them on
-const SHIPPED: &[(&str, &str)] = &[("classRoulette.js", include_str!("../../resources/userscripts/classRoulette.js"))];
+const SHIPPED: &[(&str, &str)] = &[
+    ("classRoulette.js", include_str!("../../resources/userscripts/classRoulette.js")),
+    ("quickSellByRarity.js", include_str!("../../resources/userscripts/quickSellByRarity.js")),
+];
 
 const MAX_SOURCE: usize = 4 * 1024 * 1024;
 // enough for the header in the manager's list
