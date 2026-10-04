@@ -43,6 +43,7 @@ pub(crate) struct SharedStats {
     pub(crate) samples: u64,
     pub(crate) limiter_mode: u64,
     pub(crate) render_adapter: u64,
+    pub(crate) hook_state: u64,
 }
 const SHARED_STATS_SIZE: usize = std::mem::size_of::<SharedStats>();
 pub const LIMITER_VIZ: u64 = 1;
@@ -128,6 +129,30 @@ pub fn take_present_intervals() -> Option<(u64, u64, u64, u64, u64)> {
 // luid of the adapter the game's swap chain was created on, 0 without the hook or before the first chain
 pub fn render_adapter() -> u64 {
     shared!(render_adapter).map(|field| field.load(Ordering::Relaxed)).unwrap_or(0)
+}
+
+/// the Present1 hook as the gpu process reports it: "off" (not loaded), "waiting" (no chain has reached it yet),
+/// "ready", "failed" (three tries at the first chain, final). mismatch: a chain with another Present1 was seen and left
+/// as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
+pub fn hook_state() -> serde_json::Value {
+    // a bench overrides the setting through the env, like render_hook::load
+    let loaded = modules::bench::hook_override().unwrap_or_else(|| *HOOK_AT_START.get().unwrap_or(&true));
+    if !loaded {
+        return serde_json::json!({ "state": "off" });
+    }
+    let raw = shared!(hook_state).map(|field| field.load(Ordering::Acquire)).unwrap_or(0);
+    let state = match raw & 0xF {
+        1 => "ready",
+        2 => "failed",
+        _ => "waiting",
+    };
+    serde_json::json!({
+        "state": state,
+        "mismatch": raw & 16 != 0,
+        "installUs": (raw >> 8) & 0xFF_FFFF,
+        "modifiedChains": (raw >> 32) & 0xFFFF,
+        "stockChains": raw >> 48,
+    })
 }
 
 // (fps, frame_ns) from the present hook

@@ -234,6 +234,23 @@ describe("the last check", () => {
         expect(client.gameFpsLimit).toBe(200);
     });
 
+    test("a weak laptop below its target takes the limit that makes the game react sooner", async() => {
+        // Ryzen 3 3250U on 60 Hz, 2026-10-03: the 60 limit won and the strict rule put the 105 fps back for 7 ms of mouse wait
+        const { result, client } = await run({
+            cap: 0,
+            hz: 60,
+            read: ({ cap }) => {
+                if (cap === 60) return reading(60, { taskP99: 12.5, inputP99: 22, p99: 21.6, maxMs: 23 });
+                if (cap > 0) return reading(Math.min(cap, 105), { taskP99: 30, inputP99: 16, p99: 15, maxMs: 21 });
+                return reading(105, { taskP99: 37, inputP99: 14.7, p99: 15.5, maxMs: 21 });
+            },
+        });
+        expect(client.gameFpsLimit).toBe(60);
+        expect(result.report.rolledBack).toBe(null);
+        expect(result.summary.title).toBe("Optimized");
+        expect(result.summary.details.join(" ")).toMatch(/reacts .* ms sooner.*mouse waits .* ms longer/);
+    });
+
     test("a healthy desktop keeps everything", async() => {
         const { result, client } = await run({ cap: 0, mobile: false, read: ({ cap }) => reading(cap || 1000) });
         expect(client.gameFpsLimit).toBe(0);

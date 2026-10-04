@@ -533,8 +533,8 @@ function advancedHtml(report){
  * @param {number} [prefer] the limit that takes over when it measures equal (laptops: the target rate)
  * @return {{rows: CapRow[], winner: number, reason: string, order: number[]}} order: limits worth another look, best first
  */
-function rankCaps(readings, incumbentCap, where, prefer){
-    const choice = chooseCap(readings, incumbentCap, { prefer, inputRequired: where === "test match" });
+function rankCaps(readings, incumbentCap, where, prefer, trade = false){
+    const choice = chooseCap(readings, incumbentCap, { prefer, inputRequired: where === "test match", trade });
     /** @type {CapRow[]} */
     const rows = choice.judged.map((entry) => ({ cap: entry.cap, where, summary: entry.summary, frameMs: entry.frameMs, netMs: entry.netMs, outcome: entry.outcome }));
     const won = choice.judged.find((entry) => entry.cap === choice.winner);
@@ -544,6 +544,7 @@ function rankCaps(readings, incumbentCap, where, prefer){
         const parts = [];
         if (task > 0) parts.push(`the game reacts ${shown(task)} ms sooner`);
         if (input !== null && input > 0) parts.push(`the mouse waits ${shown(input)} ms less`);
+        if (input !== null && input < 0) parts.push(`the mouse waits ${shown(-input)} ms longer, which the sooner reaction outweighs on a PC below its target`);
         reason = parts.length > 0 ? parts.join(", ") : "frames come sooner and nothing waits longer";
     }
     const order = choice.judged
@@ -1234,6 +1235,7 @@ class AutoDetect {
                 ...Object.fromEntries(["gameFpsLimit", "throttle", "inMenuThrottle", "uncapFps", "patchFrameLimiter", "obsCapturePlugin", "renderStats", "performanceMode", "webviewPriority", ...PIPELINE.map((entry) => entry.setting)]
                     .map((key) => [key, baseline.client[key] ?? kute.settings.data[key] ?? null])),
                 gameFrameCap: frameCapBefore,
+                hook: specs.hook ?? null,
                 limiter: kute.frameLimiter ?? null,
                 running: kute.running ?? null,
             },
@@ -1267,6 +1269,8 @@ class AutoDetect {
                 report: report({ ...measured, rolledBack: why }),
             };
         };
+        // below the target a limit may trade mouse wait for reaction time, see policy.js accept
+        const trade = fpsOf(run.uncapped) < target;
         /**
          * the one rule every result passes, see policy.js accept
          *
@@ -1276,7 +1280,7 @@ class AutoDetect {
          * @return {string|null} why the result is not kept, null: it is
          */
         const refused = (reference, result, capAfter) => {
-            const { keep, failed } = accept(reference, result, { capBefore: originalCap, capAfter });
+            const { keep, failed } = accept(reference, result, { capBefore: originalCap, capAfter, trade });
             if (keep) return null;
             if (failed === "reference") return "Kute could not measure the game with your own settings well enough to compare (its window has to stay in front), so it put yours back.";
             if (failed === "result") return "Kute could not measure the result (its window has to stay in front), so it put your settings back.";
@@ -1333,7 +1337,7 @@ class AutoDetect {
             measuredCaps = await sampleEach(candidates);
             if (this.cancelled) return null;
             pushed = collapses(measuredCaps);
-            const ranked = rankCaps(measuredCaps, originalCap, "test match", prefer);
+            const ranked = rankCaps(measuredCaps, originalCap, "test match", prefer, trade);
             capRows = ranked.rows;
             if (!pushed){
                 bestCap = ranked.winner;
@@ -1341,12 +1345,12 @@ class AutoDetect {
                 capacity = fpsOf(measuredCaps.get(0) ?? []) || roughCapacity;
 
                 // one more look between the best limit and its neighbours
-                const between = refineCaps([...measuredCaps.keys()], bestCap, capacity).filter((cap) => allowed(cap) && cap < capacity);
+                const between = refineCaps([...measuredCaps.keys()], bestCap, capacity, hz).filter((cap) => allowed(cap) && cap < capacity);
                 if (between.length > 0){
                     panel.progress("Fine tuning the FPS limit", 0.64);
                     const finer = await sampleEach(between);
                     if (this.cancelled) return null;
-                    const refined = rankCaps(new Map([[bestCap, measuredCaps.get(bestCap) ?? []], ...finer]), bestCap, "test match");
+                    const refined = rankCaps(new Map([[bestCap, measuredCaps.get(bestCap) ?? []], ...finer]), bestCap, "test match", undefined, trade);
                     capRows.push(...refined.rows.filter((row) => row.cap !== bestCap));
                     for (const [cap, readings] of finer) measuredCaps.set(cap, readings);
                     if (refined.winner !== bestCap){
