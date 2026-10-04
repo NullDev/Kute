@@ -1,7 +1,7 @@
 import { kute } from "../client.js";
 import { getElement, getInput, checkCompMode, request } from "../utils.js";
 import { confirmPopup } from "./confirmPopup.js";
-import { restart } from "./sessionRecovery.js";
+import { holdRestart, restart } from "./sessionRecovery.js";
 
 /**
  * host keeps the credentials, the page only ever gets names and colors
@@ -24,6 +24,20 @@ const DEFAULT_COLOR = "#35e0e8";
 const SWITCH_KEY = "kute_account_switch";
 // logout reload plus a hung load and its recovery reload
 const SWITCH_MAX_MS = 120000;
+// in-page switch: logout, new frvr session, login, one page load
+const SWITCH_HOLD_MS = 30000;
+const FRVR_LOGOUT_WAIT_MS = 3000;
+const LOGIN_WAIT_MS = 20000;
+// the page shows a login itself when the lobby socket answers it, measured ~1 s
+const SOCKET_LOGIN_MS = 3000;
+
+/**
+ * @param {number} ms
+ * @return {Promise<void>}
+ */
+const sleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+});
 
 /**
  * @param {string} encoded
@@ -477,15 +491,38 @@ class AccountManager {
 
     /**
      * @param {Account} account
+     * @return {Promise<void>}
      */
-    login(account){
+    async login(account){
         this.closeMenu();
-        // frvr can't log in again on the page of a logout, sessionRecovery reloads and resumeSwitch finishes it
-        if (localStorage.getItem("krunker_token") !== null){
-            sessionStorage.setItem(SWITCH_KEY, JSON.stringify({ username: account.username, at: Date.now() }));
-            window.logoutAcc();
-            restart();
-            return;
+        const auth = window.FRVR?.auth;
+        const signedIn = localStorage.getItem("krunker_token") !== null;
+        if (typeof auth?.loginAsAnonymous !== "function" || typeof auth.isLoggedIn !== "function"){
+            // no frvr sdk to ask: sessionRecovery reloads after the logout and resumeSwitch finishes it on the fresh page
+            if (signedIn){
+                sessionStorage.setItem(SWITCH_KEY, JSON.stringify({ username: account.username, at: Date.now() }));
+                window.logoutAcc();
+                restart();
+                return;
+            }
+        }
+        else {
+            if (signedIn){
+                holdRestart(SWITCH_HOLD_MS);
+                window.logoutAcc();
+                for (let waited = 0; waited < FRVR_LOGOUT_WAIT_MS && auth.isLoggedIn(); waited += 100) await sleep(100);
+            }
+            // logoutAcc empties the frvr session but the sdk keeps it: the next login refreshes a null token and
+            // fails with "Invalid format on data". a fresh anonymous session takes the login
+            if (!auth.isLoggedIn()){
+                try {
+                    await auth.loginAsAnonymous();
+                }
+                catch (error){
+                    console.error("[kute] accounts: anonymous frvr login failed:", error);
+                }
+            }
+            this.finishSwitch(auth).catch((error) => console.error("[kute] accounts:", error));
         }
         window.loginOrRegister();
 
@@ -502,6 +539,30 @@ class AccountManager {
                 this.send("login", { username: account.username });
             });
         });
+    }
+
+    /**
+     * The login lands in frvr (platform leaves "anonymous"), then the lobby socket signs the page in. After a logout
+     * the server never answers that socket login (header stays on "Logging in..."), but a fresh page signs in from
+     * the frvr tokens by itself, measured 2026-10-04. So: one page load, no form on it.
+     *
+     * @param {NonNullable<typeof window.FRVR>["auth"]} auth
+     * @return {Promise<void>}
+     */
+    async finishSwitch(auth){
+        let landed = 0;
+        for (let waited = 0; waited < LOGIN_WAIT_MS; waited += 250){
+            await sleep(250);
+            if (localStorage.getItem("krunker_token") !== null) return;
+            const inFrvr = typeof auth.getCurrentPlatform === "function" ? auth.getCurrentPlatform() !== "anonymous" : false;
+            if (!inFrvr) continue;
+            landed ||= Date.now();
+            if (Date.now() - landed >= SOCKET_LOGIN_MS){
+                holdRestart(SWITCH_HOLD_MS);
+                restart();
+                return;
+            }
+        }
     }
 
     /**
