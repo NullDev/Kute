@@ -9,8 +9,9 @@
 
 // shipped with kute as an example of a userscript that talks to krunker's own market api, the same requests the
 // game's quick sell window makes: GET market/inventory, POST market/quick-sell per stack, item data from data/skins.
-// nothing is sold before the preview dialog and the confirm dialog were both accepted. settings: `rarity` (sel),
-// `hotkey` (keybind, the manager's shape {key, ctrl, alt, shift}). `this.unload` removes the hotkey and closes dialogs
+// nothing is sold before the preview dialog and the confirm dialog were both accepted. a button in the market
+// window's inventory tab opens it. `this.settings` holds the preselected rarity (sel), `this._css` adds the button's
+// hover style, `this.unload` removes button, observer, style and dialogs so the manager can switch it off live
 
 const API = "https://gapi.svc.krunker.io";
 // krunker's rarity table: name, kr per quick sold item
@@ -21,8 +22,6 @@ const PAUSE_MS = 250;
 
 const log = this._console;
 
-/** @type {{ key: string, ctrl: boolean, alt: boolean, shift: boolean }} */
-let hotkey = { key: "q", ctrl: true, alt: false, shift: true };
 let rarityName = RARITIES[0][0];
 /** @type {Promise<any[]>|null} */
 let skinsPromise = null;
@@ -377,15 +376,34 @@ const openPicker = () => {
     refresh();
 };
 
-const onKeyDown = (/** @type {KeyboardEvent} */ event) => {
-    if (!hotkey.key || event.key.toLowerCase() !== hotkey.key || event.ctrlKey !== hotkey.ctrl || event.altKey !== hotkey.alt || event.shiftKey !== hotkey.shift) return;
-    // a match holds the pointer, the menu does not
-    if (document.pointerLockElement || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-    event.preventDefault();
-    event.stopPropagation();
-    openPicker();
+// a button next to "Reset Filters" in the market window's inventory tab. svelte rebuilds that header on every tab
+// switch, so it is added again whenever the popup holder changes (popups only change in the menu, never mid match)
+const BUTTON_CLASS = "kuteQuickSellButton";
+this._css(`.${BUTTON_CLASS}:hover { background: #777 !important; }`, BUTTON_CLASS, true);
+
+const mountButton = () => {
+    const controls = document.querySelector(".market-container .inventory-filter .filter-controls");
+    // the browse tab has the same filter header
+    const onInventory = /inventory/i.test(document.querySelector(".market-container .tabs-container .tab-active")?.textContent ?? "");
+    if (!controls || !onInventory){
+        document.querySelector(`.${BUTTON_CLASS}`)?.remove();
+        return;
+    }
+    if (controls.querySelector(`.${BUTTON_CLASS}`)) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = BUTTON_CLASS;
+    button.textContent = "Quick Sell by Rarity";
+    // the game's own filter buttons: 12px GameFont, #666, radius 4, 6px 12px
+    button.style.cssText = "font: 12px GameFont; background: #666; color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; margin-right: 8px; cursor: pointer;";
+    button.onclick = () => openPicker();
+    controls.prepend(button);
 };
-window.addEventListener("keydown", onKeyDown, true);
+const popupHolder = document.getElementById("popupHolder");
+const observer = new MutationObserver(mountButton);
+if (popupHolder) observer.observe(popupHolder, { childList: true, subtree: true });
+else log.warn("[quick sell] #popupHolder not found, is this krunker?");
+mountButton();
 
 this.settings = {
     rarity: {
@@ -398,19 +416,12 @@ this.settings = {
             rarityName = value;
         },
     },
-    hotkey: {
-        title: "Open the dialog",
-        desc: "Works in the menu, not while a match holds the mouse",
-        type: "keybind",
-        value: hotkey,
-        changed(/** @type {typeof hotkey} */ value){
-            hotkey = value;
-        },
-    },
 };
 
 this.unload = () => {
-    window.removeEventListener("keydown", onKeyDown, true);
+    observer.disconnect();
+    document.querySelector(`.${BUTTON_CLASS}`)?.remove();
+    this._css("", BUTTON_CLASS, false);
     closeDialog?.();
     busy = false;
 };
