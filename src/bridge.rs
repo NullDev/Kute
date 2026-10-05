@@ -58,6 +58,7 @@ fn host_features() -> serde_json::Value {
 fn host_features() -> serde_json::Value {
     serde_json::json!([
         "matchmaker",
+        "dev-proof",
         "kute-icons",
         "script-manager",
         "audio-fix",

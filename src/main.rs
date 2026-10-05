@@ -23,10 +23,7 @@ pub mod modules {
     pub mod bench;
     pub mod blocklist;
     pub mod custom_css;
-    #[cfg(windows)]
     pub mod dev;
-    #[cfg(target_os = "linux")]
-    pub use crate::linux::dev;
     pub mod devtools;
     #[cfg(windows)]
     pub mod dpapi;

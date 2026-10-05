@@ -1,5 +1,4 @@
 // linux siblings of the win32 modules, re-exported under the same paths in main.rs
-pub mod dev;
 pub mod dpapi;
 pub mod gpu;
 pub mod input;
