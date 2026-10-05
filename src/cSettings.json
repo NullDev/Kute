@@ -294,7 +294,6 @@
     "renderStats": {
         "name": "Present FPS Counter",
         "id": "renderStats",
-        "platforms": ["windows"],
         "description": "The game counter shows how fast your PC runs the game, this adds the frames that reach your screen",
         "type": "checkbox",
         "category": "Interface",

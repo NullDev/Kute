@@ -884,7 +884,11 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         }
         ["get-present-intervals"] => {
             // blocks up to 150 ms, off the UI thread
+            #[cfg(windows)]
             let hook = config("hardFlip", true);
+            // patch 10, always on
+            #[cfg(target_os = "linux")]
+            let hook = true;
             let browser_id = browser.identifier();
             std::thread::spawn(move || {
                 let intervals = if hook { app::take_present_intervals() } else { None };

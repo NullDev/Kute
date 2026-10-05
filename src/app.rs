@@ -182,7 +182,11 @@ pub fn render_adapter() -> u64 {
 // as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
 pub fn hook_state() -> serde_json::Value {
     // a bench overrides the setting through the env, like render_hook::load
+    #[cfg(windows)]
     let loaded = modules::bench::hook_override().unwrap_or_else(|| *HOOK_AT_START.get().unwrap_or(&true));
+    // patch 10 measures in viz, always on: a clock read per frame, nothing to switch off like the hook
+    #[cfg(target_os = "linux")]
+    let loaded = true;
     if !loaded {
         return serde_json::json!({ "state": "off" });
     }
@@ -252,6 +256,9 @@ pub fn load_flags() {
     if config("disableOnlineFeatures", false) {
         flags.push("--host-resolver-rules=MAP kute.lol ~NOTFOUND, MAP *.kute.lol ~NOTFOUND".to_string());
     }
+    // present stats from viz (patch 10), what render.dll's hook measures on windows
+    #[cfg(target_os = "linux")]
+    flags.push("--enable-features=KutePresentStats".to_string());
     // a bench decides its patches itself (bench::flags), the settings decide for the client
     if modules::bench::config().is_none() {
         for patch in PATCHES {
