@@ -18,6 +18,8 @@ Plain `git diff` files against `chromium/src` at 151.0.7922.174 (CEF branch 7922
 
 - `08-frame-limiter.patch`: `components/viz/service/display/display_scheduler.{h,cc}`, feature `KuteFrameLimiter`, off by default, Kute turns it on for the "Chromium FPS Limiter" setting. With `--disable-frame-rate-limit` an FPS cap had to be held elsewhere: the DXGI hook slept inside `Present` on the GPU thread (sleep plus a 1 ms spin per frame, and the whole wait spun once frames were under 2 ms: 1.65 cores of CPU at a 500 cap), and without the hook the bundle busy-waited on the game's main thread (every other task up to 11 ms late at a 240 cap). What the hook's sleep really did was delay the swap ack, and a pending swap is what keeps `DisplayScheduler` from drawing the next frame (`pending_swaps_`, the "Swap throttled" deadline mode). With the feature `DidReceiveSwapBuffersAck` holds the ack until the next deadline of the interval the host writes into its `KuteFrameTiming` mapping (`target_fps`, read live, the slider works), then runs the stock handling. Frames reach the screen on a fixed grid through the same state machine path as with the hook, no thread sits in `Present`, nothing spins: a precise `DeadlineTimer` covers all but the last 2 ms, a high resolution waitable timer the rest (a plain delayed task got its wake aligned, 1.7 ms late at 240). Measured against the hook's limiter: same pacing on the orb scene (p99 4.8 ms at 240, 2.5 ms at 500), 20 of 20 seconds at exactly 500 with the hook on and off, input age in the game page equal or slightly better (p99 5.2 vs 5.3 ms at 240, 2.9 vs 3.1 ms at 500), half the CPU of the old hook wait, and it works with the hook off and on any backend. Three earlier designs failed and are worth knowing: pacing the `BackToBackBeginFrameSource` halves the rate at 500 (the Display draws one tick after the renderer submits); holding the renderer's surface acks in `Display::DrawAndSwap` works for seconds and then drops to half rate, because a renderer that waits for its ack is a "pending surface" to the scheduler and which deadline mode it picks depends on interleaving. The host writes `limiter_mode` into the mapping so the hook skips its own wait while this paces (render-dll `LIMITER_VIZ`).
 
+- `09-frame-limiter-linux.patch`: applies on top of 08, Linux only (`#elif BUILDFLAG(IS_LINUX)`, the Windows code is untouched). 08 reads the limit from a Windows file mapping and does its last 2 ms on a waitable timer, so on Linux the feature did nothing. Here the host's `KuteFrameTiming` block is POSIX shared memory (`shm_open("/KuteFrameTiming")`, created by `app.rs` before the GPU process starts, Kute runs without the sandbox), and the last 2 ms are an absolute `clock_nanosleep` on `CLOCK_MONOTONIC`, the clock `base::TimeTicks` uses on Linux. Not measured yet: pacing and input age need a real Linux session with a real GPU, WSLg presents through RDP.
+
 Every patch is the exact diff of the tree the shipped DLL was built from. Since 2026-10-01 each one has a feature switch and a setting in Kute's Engine category (`src/app.rs::PATCHES` maps setting to feature), so a player and the auto-detect bench can turn any of them off: a `--disable-features=` line is pushed for a setting that is off, and Chromium lets the disable list win over `user_flags.json`.
 
 ## Rebuilding the DLL
@@ -66,6 +68,29 @@ What the shipped DLL was built with: CEF branch 7922, CEF commit `2384915b7b1f0f
 6. Copy `chromium\src\out\Release_GN_x64\libcef.dll` to `resources\cef\libcef.dll` and commit it (Git LFS). Only `libcef.dll` differs from the official distribution; `v8_context_snapshot.bin` and `icudtl.dat` come out byte identical, so the rest stays stock.
 
 A `libcef.dll` that does not match the `cef` crate version crashes on start: when bumping the crate, rebuild first or delete `resources/cef/libcef.dll`.
+
+## Rebuilding libcef.so (Linux)
+
+Same CEF branch, commit and Chromium version as above. Built in a WSL2 Ubuntu 24.04 distro with 48 GB of memory and 32 GB of swap (`.wslconfig`), the tree on the distro's own disk, never under `/mnt/c`. The checkout took 9 minutes and 30 GB.
+
+1. Environment for every step:
+
+   ```
+   export GN_DEFINES="use_sysroot=true is_official_build=true proprietary_codecs=true ffmpeg_branding=Chrome symbol_level=0 blink_symbol_level=0 v8_symbol_level=0"
+   export CEF_ARCHIVE_FORMAT=tar.bz2
+   ```
+
+   `use_sysroot=true` builds against Chromium's Debian bullseye sysroot like CEF's own releases (old glibc, runs on older distros). Without it GN looks for the host's development packages and stops at the first missing one (`libpipewire-0.3`).
+
+2. Checkout with the same `automate-git.py` call as on Windows (`--download-dir=$HOME/cef`, no `py -3.12`), then `sudo build/install-build-deps.sh --no-prompt --no-arm --no-nacl --no-chromeos-fonts` and `python3 build/linux/sysroot_scripts/install-sysroot.py --arch=amd64` in `chromium/src`.
+
+3. Apply 01, 02, 04, 05, 06, 08 and 09 in `chromium/src`. 03 and 07 only touch Windows files and are left out, so `KuteRawInputMovementOnly` and `KuteHighQoSForeground` do not exist in this build.
+
+4. In `chromium/src/cef` run `./cef_create_projects.sh`, then in `chromium/src`:
+
+   ```
+   autoninja -C out/Release_GN_x64 libcef
+   ```
 
 ## How the patches were checked
 
