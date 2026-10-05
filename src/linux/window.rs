@@ -96,6 +96,53 @@ fn borrowed_cef_string(text: &str) -> CefString {
     })
 }
 
+fn bench_locked() -> bool {
+    modules::bench::config().is_some_and(|bench| bench.locked)
+}
+
+// the auto-detect bench covers the client: no focus, no taskbar entry, clicks go through. x11 only, cef views has no
+// inactive show, and on native wayland a client cannot ask for any of this
+fn lock_bench_window(handle: u64) -> Option<()> {
+    use x11rb::{
+        connection::Connection,
+        protocol::xproto::{AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, PropMode},
+        wrapper::ConnectionExt as _,
+    };
+    let window = u32::try_from(handle).ok().filter(|&window| window != 0)?;
+    let (connection, screen) = x11rb::connect(None).ok()?;
+    let root = connection.setup().roots.get(screen)?.root;
+    let atom = |name: &str| Some(connection.intern_atom(false, name.as_bytes()).ok()?.reply().ok()?.atom);
+    // WM_HINTS: InputHint set, input false. the window manager then never gives it the keyboard
+    connection
+        .change_property32(PropMode::REPLACE, window, AtomEnum::WM_HINTS, AtomEnum::WM_HINTS, &[1, 0, 0, 0, 0, 0, 0, 0, 0])
+        .ok()?;
+    let state = atom("_NET_WM_STATE")?;
+    let skip = [atom("_NET_WM_STATE_SKIP_TASKBAR")?, atom("_NET_WM_STATE_SKIP_PAGER")?];
+    // before the map a property, after it only a request to the window manager counts
+    connection.change_property32(PropMode::APPEND, window, state, AtomEnum::ATOM, &skip).ok()?;
+    // 1: _NET_WM_STATE_ADD
+    let request = ClientMessageEvent::new(32, window, state, [1, skip[0], skip[1], 1, 0]);
+    connection
+        .send_event(false, root, EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY, request)
+        .ok()?;
+    connection.flush().ok()?;
+    pass_input_through(handle)
+}
+
+// an empty input shape. chromium sets the window's input region again after a bounds change, so this follows each one
+fn pass_input_through(handle: u64) -> Option<()> {
+    use x11rb::{connection::Connection, protocol::shape::SK, protocol::xfixes::ConnectionExt as _};
+    let window = u32::try_from(handle).ok().filter(|&window| window != 0)?;
+    let (connection, _) = x11rb::connect(None).ok()?;
+    connection.xfixes_query_version(5, 0).ok()?.reply().ok()?;
+    let region = connection.generate_id().ok()?;
+    connection.xfixes_create_region(region, &[]).ok()?;
+    connection.xfixes_set_window_shape_region(window, SK::INPUT, 0, 0, region).ok()?;
+    connection.xfixes_destroy_region(region).ok()?;
+    connection.flush().ok()?;
+    Some(())
+}
+
 fn window_icon() -> Option<Image> {
     let image = image_create()?;
     (image.add_png(1.0, Some(ICON_PNG)) != 0).then_some(image)
@@ -124,11 +171,20 @@ wrap_window_delegate! {
                 window.set_window_icon(Some(&mut icon));
                 window.set_window_app_icon(Some(&mut icon));
             }
+            let locked = bench_locked();
+            if locked {
+                lock_bench_window(window.window_handle());
+            }
             window.show();
             if self.state.get().fullscreen {
                 window.set_fullscreen(1);
             }
-            self.browser_view.request_focus();
+            if locked {
+                // chromium writes its own _NET_WM_STATE when it maps the window
+                lock_bench_window(window.window_handle());
+            } else {
+                self.browser_view.request_focus();
+            }
         }
 
         fn on_window_destroyed(&self, window: Option<&mut Window>) {
@@ -144,6 +200,10 @@ wrap_window_delegate! {
                 debug_print!("window: last window destroyed, quitting");
                 quit_message_loop();
             }
+        }
+
+        fn is_frameless(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            bench_locked() as ::std::os::raw::c_int
         }
 
         // asks cef first, the window closes once the browser is gone
@@ -196,10 +256,16 @@ wrap_window_delegate! {
                 };
             }
             self.state.set(state);
+            if bench_locked() {
+                pass_input_through_later(window.window_handle());
+            }
         }
 
         fn on_window_fullscreen_transition(&self, window: Option<&mut Window>, is_completed: ::std::os::raw::c_int) {
             if let (Some(window), 1) = (window, is_completed) {
+                if bench_locked() {
+                    pass_input_through_later(window.window_handle());
+                }
                 let mut state = self.state.get();
                 state.fullscreen = window.is_fullscreen() != 0;
                 self.state.set(state);
@@ -348,6 +414,24 @@ wrap_task! {
             post_delayed_task(ThreadId::UI, Some(&mut next), RENDER_STATS_MS);
         }
     }
+}
+
+wrap_task! {
+    struct InputShapeTask {
+        handle: u64,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            pass_input_through(self.handle);
+        }
+    }
+}
+
+// chromium resets the input region after the delegate callbacks, measured: a direct call was undone every time
+fn pass_input_through_later(handle: u64) {
+    let mut task = InputShapeTask::new(handle);
+    post_delayed_task(ThreadId::UI, Some(&mut task), 200);
 }
 
 fn start_render_stats() {
@@ -502,9 +586,8 @@ pub fn receive_args(args: &str) {
 pub fn create_main_window() {
     let bench = modules::bench::config();
     let state = match bench.and_then(|bench| bench.rect) {
-        // TODO: the locked bench window (no focus, no input) of the win32 host
         Some([left, top, right, bottom]) => WindowState {
-            fullscreen: false,
+            fullscreen: bench_locked(),
             maximized: false,
             position: Position { left, top, right, bottom },
         },
