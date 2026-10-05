@@ -179,6 +179,15 @@ wrap_request_context_handler! {
     pub struct KuteRequestContextHandler;
 
     impl RequestContextHandler {
+        // chrome style never stores a grant from the permission handler, without this enumerateDevices hides
+        // every mic name and krunker's voice chat shows "Unknown device"
+        fn on_request_context_initialized(&self, request_context: Option<&mut RequestContext>) {
+            if let Some(context) = request_context {
+                let url = CefString::from("https://krunker.io/");
+                context.set_content_setting(Some(&url), Some(&url), ContentSettingTypes::MEDIASTREAM_MIC, ContentSettingValues::ALLOW);
+            }
+        }
+
         fn resource_request_handler(
             &self,
             _browser: Option<&mut Browser>,
