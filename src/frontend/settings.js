@@ -21,6 +21,7 @@ import { hiddenByPerformance, overridePerformance } from "./performance.js";
  * @property {string} [requires] id of a checkbox setting this one depends on, disabled while that is off
  * @property {string} [disabledBy] id of a checkbox setting that forces this one off while on, the stored value stays
  * @property {string} [hostFeature] hostFeatures entry the exe must list, the setting is not shown without it
+ * @property {string[]} [platforms] Only shown on these ("windows", "linux"), an exe that reports no platform is windows
  * @property {boolean|null} [performance] Value while performance mode is on, the row is hidden then. null only hides it
  * @property {number} [min]
  * @property {number} [max]
@@ -447,6 +448,7 @@ class SettingsManager {
         for (const setting of Object.values(settings)){
             // an exe older than the setting would store the value and ignore it
             if (setting.hostFeature && !kute.hostFeatures?.includes(setting.hostFeature)) continue;
+            if (setting.platforms && !setting.platforms.includes(kute.platform ?? "windows")) continue;
             if (hiddenByPerformance(kute.settings.data, setting.id)) continue;
             if (this.settingsWindow.settingSearch && !this.searchMatches(setting)) continue;
 

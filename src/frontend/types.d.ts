@@ -72,6 +72,8 @@ interface Kute {
     bindShoot(): void;
     /** absent on older exes */
     hostFeatures?: string[];
+    /** the exe's os, absent on windows exes older than the linux port */
+    platform?: "windows" | "linux";
     /** who holds the fps limit, "viz" = chromium (patch 08), absent or "hook" = the present hook with the busy wait fallback */
     frameLimiter?: "viz" | "hook";
     /** restart-only settings as this process was started with, by setting id. a stored value that differs needs a restart */

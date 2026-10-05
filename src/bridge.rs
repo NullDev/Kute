@@ -31,33 +31,54 @@ pub fn post_string(browser: &Browser, text: &str) {
     }
 }
 
+#[cfg(windows)]
+fn host_features() -> serde_json::Value {
+    serde_json::json!([
+        "matchmaker",
+        "dev-proof",
+        "kute-icons",
+        "script-manager",
+        "audio-fix",
+        "spotify",
+        "custom-css",
+        "swapper-editor",
+        "x3d-cores",
+        "custom-sky",
+        "performance-mode",
+        "cef-patches",
+        "hybrid-gpu",
+        "autodetect-v2",
+        "load-sample",
+        "hotkeys"
+    ])
+}
+
+// what the linux host really does, the rest are stubs there (src/linux)
+#[cfg(target_os = "linux")]
+fn host_features() -> serde_json::Value {
+    serde_json::json!([
+        "matchmaker",
+        "kute-icons",
+        "script-manager",
+        "audio-fix",
+        "custom-css",
+        "swapper-editor",
+        "custom-sky",
+        "performance-mode",
+        "cef-patches",
+        "hotkeys"
+    ])
+}
+
 pub fn send_info(frame: &Frame) {
     let version = env!("CARGO_PKG_VERSION");
     let mut info_map = serde_json::Map::new();
     info_map.insert("settings".to_string(), serde_json::json!(&*crate::CONFIG.lock().unwrap()));
     info_map.insert("version".to_string(), serde_json::Value::String(version.to_string()));
     info_map.insert("apiBase".to_string(), serde_json::Value::String(crate::utils::api_url()));
-    info_map.insert(
-        "hostFeatures".to_string(),
-        serde_json::json!([
-            "matchmaker",
-            "dev-proof",
-            "kute-icons",
-            "script-manager",
-            "audio-fix",
-            "spotify",
-            "custom-css",
-            "swapper-editor",
-            "x3d-cores",
-            "custom-sky",
-            "performance-mode",
-            "cef-patches",
-            "hybrid-gpu",
-            "autodetect-v2",
-            "load-sample",
-            "hotkeys"
-        ]),
-    );
+    // an exe without this field is a windows one
+    info_map.insert("platform".to_string(), serde_json::Value::String(std::env::consts::OS.to_string()));
+    info_map.insert("hostFeatures".to_string(), host_features());
 
     // restart-only settings as this process runs them, the page compares them with the stored ones
     let mut running: serde_json::Map<String, serde_json::Value> = crate::app::PATCHES
