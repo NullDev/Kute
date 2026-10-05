@@ -154,6 +154,19 @@ wrap_window_delegate! {
             }
         }
 
+        // cef-rs defaults every callback to 0, cef's own default for these is true
+        fn can_resize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_maximize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_minimize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
         fn initial_bounds(&self, _window: Option<&mut Window>) -> Rect {
             let position = self.state.get().position;
             Rect {
