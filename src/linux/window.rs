@@ -5,10 +5,12 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 static WINDOW_COUNT: AtomicUsize = AtomicUsize::new(0);
+// the input replay's thread asks, cef windows are ui thread only
+static MAIN_ACTIVE: AtomicBool = AtomicBool::new(false);
 static BROWSER_COUNT: AtomicUsize = AtomicUsize::new(0);
 const RENDER_STATS_MS: i64 = 100;
 const ICON_PNG: &[u8] = include_bytes!("../../resources/kute-256.png");
@@ -261,6 +263,12 @@ wrap_window_delegate! {
             }
         }
 
+        fn on_window_activation_changed(&self, _window: Option<&mut Window>, active: ::std::os::raw::c_int) {
+            if self.is_main {
+                MAIN_ACTIVE.store(active != 0, Ordering::Relaxed);
+            }
+        }
+
         fn on_window_fullscreen_transition(&self, window: Option<&mut Window>, is_completed: ::std::os::raw::c_int) {
             if let (Some(window), 1) = (window, is_completed) {
                 if bench_locked() {
@@ -326,6 +334,11 @@ fn window_of(browser: &Browser) -> Option<Window> {
         let mut browser = browser.clone();
         browser_view_get_for_browser(Some(&mut browser))?.window()
     })
+}
+
+// the game's window has the keyboard focus, what GetForegroundWindow tells the windows replay
+pub fn main_window_active() -> bool {
+    MAIN_ACTIVE.load(Ordering::Relaxed)
 }
 
 // x11 window id, unused by the linux specs and replay
