@@ -908,6 +908,23 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         ["restart"] => {
             modules::lifecycle::restart();
         }
+        // the AppImage updater, linuxUpdate.js
+        #[cfg(target_os = "linux")]
+        ["update-state"] => {
+            modules::updater::send_state(browser);
+        }
+        #[cfg(target_os = "linux")]
+        ["update-install"] => {
+            modules::updater::install();
+        }
+        #[cfg(target_os = "linux")]
+        ["update-restart"] => {
+            modules::updater::restart();
+        }
+        #[cfg(target_os = "linux")]
+        ["update-page"] => {
+            open_in_default_browser(constants::RELEASE_PAGE_URL);
+        }
         ["bring-to-front"] => {
             window::bring_to_front(browser);
         }

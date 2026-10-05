@@ -199,6 +199,7 @@ Object.defineProperty(window, "gameLoaded", {
         if (kute?.settings?.data?.keystrokes) import("./modules/keystrokes.js");
         // always: customize button needs the module
         if (kute.hostFeatures?.includes("custom-sky")) import("./modules/customSky.js");
+        if (kute.hostFeatures?.includes("appimage-update")) import("./modules/linuxUpdate.js").catch(() => {});
 
         if (kute?.settings?.data?.rampBoost && !checkCompMode()){
             window.chrome.webview.postMessage("toggle-rboost, true");

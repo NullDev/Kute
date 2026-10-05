@@ -448,6 +448,26 @@ pub fn handle_accelerator_key(browser: &Browser, action: Action) {
     }
 }
 
+wrap_task! {
+    struct PostToMainTask {
+        json: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(browser) = MAIN_BROWSER.with_borrow(|b| b.clone()) {
+                bridge::post_json(&browser, &self.json);
+            }
+        }
+    }
+}
+
+// any thread, dropped while there is no game page
+pub fn post_to_main(json: String) {
+    let mut task = PostToMainTask::new(json);
+    post_task(ThreadId::UI, Some(&mut task));
+}
+
 // args from a second instance (instance.rs), what WM_COPYDATA does on windows
 pub fn receive_args(args: &str) {
     match MAIN_BROWSER.with_borrow(|b| b.clone()) {

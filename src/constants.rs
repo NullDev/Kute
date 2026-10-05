@@ -3,6 +3,9 @@ pub const UPDATE_URL: &str = "https://api.github.com/repos/NullDev/Kute/releases
 pub const RELEASE_PAGE_URL: &str = "https://github.com/NullDev/Kute/releases/latest";
 #[cfg(windows)]
 pub const INSTALLER_ASSET: &str = "kute-setup-x86_64.msi";
+// sorts after INSTALLER_ASSET: exes up to 0.1.17 run assets[0] as the installer
+#[cfg(target_os = "linux")]
+pub const APPIMAGE_ASSET: &str = "kute-x86_64.AppImage";
 pub const RELEASE_DOWNLOAD_PREFIX: &str = "https://github.com/NullDev/Kute/releases/download/";
 #[cfg(windows)]
 pub const PORTABLE_MARKER: &str = "portable.flag";

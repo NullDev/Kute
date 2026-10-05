@@ -103,7 +103,12 @@ const WAIT_PID_ARG: &str = "--wait-pid=";
 // spawns a client that waits for this one, then closes normally so config and profile get released
 pub fn restart() {
     let args: Vec<String> = crate::LAUNCH_ARGS.lock().unwrap().clone();
-    if let Ok(exe) = env::current_exe() {
+    // inside an AppImage current_exe is the temporary mount, the file to start again is $APPIMAGE
+    #[cfg(target_os = "linux")]
+    let exe = env::var_os("APPIMAGE").map(std::path::PathBuf::from).ok_or(()).or_else(|_| env::current_exe());
+    #[cfg(windows)]
+    let exe = env::current_exe();
+    if let Ok(exe) = exe {
         process::Command::new(exe).args(args).arg(format!("{WAIT_PID_ARG}{}", process::id())).spawn().ok();
     }
     crate::window::close_all();

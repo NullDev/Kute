@@ -68,7 +68,8 @@ fn host_features() -> serde_json::Value {
         "custom-sky",
         "performance-mode",
         "cef-patches",
-        "hotkeys"
+        "hotkeys",
+        "appimage-update"
     ])
 }
 
