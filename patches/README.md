@@ -20,6 +20,8 @@ Plain `git diff` files against `chromium/src` at 151.0.7922.174 (CEF branch 7922
 
 - `09-frame-limiter-linux.patch`: applies on top of 08, Linux only (`#elif BUILDFLAG(IS_LINUX)`, the Windows code is untouched). 08 reads the limit from a Windows file mapping and does its last 2 ms on a waitable timer, so on Linux the feature did nothing. Here the host's `KuteFrameTiming` block is POSIX shared memory (`shm_open("/KuteFrameTiming")`, created by `app.rs` before the GPU process starts, Kute runs without the sandbox), and the last 2 ms are an absolute `clock_nanosleep` on `CLOCK_MONOTONIC`, the clock `base::TimeTicks` uses on Linux. Not measured yet: pacing and input age need a real Linux session with a real GPU, WSLg presents through RDP.
 
+- `10-present-stats-linux.patch`: new `components/viz/service/display/kute_present_stats.{h,cc}` plus three calls in `display.cc`, feature `KutePresentStats`, off by default, the Linux host always turns it on (`app.rs`). On Windows `render.dll`'s Present1 hook fills the host's `KuteFrameTiming` block with present statistics; Linux has no such hook, so viz writes the same fields itself: `frame_ns` and `fps` as a moving average (gaps over 250 ms restart it), `hook_state` ready, and on a host request (`stats_request` / `stats_ack`) the p50, p99 and maximum of the present intervals since the last request, all with render-dll's constants so auto-detect compares the same numbers on both platforms. A present is a frame `Display::DrawAndSwap` hands to `SwapBuffers`, after patch 08/09's pacing, the counterpart of `Present1`. The sort runs after the swap was issued, never in front of the frame. Each window has its own `Display`: the one that swaps keeps the statistics and another (a social popup) only takes over after 300 ms without a swap, render-dll's `MAIN_SILENT_MS`; displays under 200 px high never count. `arrive_p99_ns` stays 0, there is no wait in front of the swap. Code inside is Linux only (`BUILDFLAG(IS_LINUX)`), elsewhere the feature has nothing to map.
+
 Every patch is the exact diff of the tree the shipped DLL was built from. Since 2026-10-01 each one has a feature switch and a setting in Kute's Engine category (`src/app.rs::PATCHES` maps setting to feature), so a player and the auto-detect bench can turn any of them off: a `--disable-features=` line is pushed for a setting that is off, and Chromium lets the disable list win over `user_flags.json`.
 
 ## Rebuilding the DLL
@@ -84,7 +86,7 @@ Same CEF branch, commit and Chromium version as above. Built in a WSL2 Ubuntu 24
 
 2. Checkout with the same `automate-git.py` call as on Windows (`--download-dir=$HOME/cef`, no `py -3.12`), then `sudo build/install-build-deps.sh --no-prompt --no-arm --no-nacl --no-chromeos-fonts` and `python3 build/linux/sysroot_scripts/install-sysroot.py --arch=amd64` in `chromium/src`.
 
-3. Apply 01, 02, 04, 05, 06, 08 and 09 in `chromium/src`. 03 and 07 only touch Windows files and are left out, so `KuteRawInputMovementOnly` and `KuteHighQoSForeground` do not exist in this build.
+3. Apply 01, 02, 04, 05, 06, 08, 09 and 10 in `chromium/src`. 03 and 07 only touch Windows files and are left out, so `KuteRawInputMovementOnly` and `KuteHighQoSForeground` do not exist in this build.
 
 4. In `chromium/src/cef` run `./cef_create_projects.sh`, then in `chromium/src`:
 
