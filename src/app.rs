@@ -172,6 +172,7 @@ pub fn take_present_intervals() -> Option<(u64, u64, u64, u64, u64)> {
 }
 
 // luid of the adapter the game's swap chain was created on, 0 without the hook or before the first chain
+#[cfg(windows)]
 pub fn render_adapter() -> u64 {
     shared!(render_adapter).map(|field| field.load(Ordering::Relaxed)).unwrap_or(0)
 }

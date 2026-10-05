@@ -17,6 +17,7 @@ use windows::{
     core::*,
 };
 
+#[cfg(windows)]
 pub fn create_utf_string(string: impl AsRef<str>) -> Vec<u16> {
     let s = string.as_ref();
     let mut v = Vec::with_capacity(s.len() + 1);
@@ -25,10 +26,12 @@ pub fn create_utf_string(string: impl AsRef<str>) -> Vec<u16> {
     v
 }
 
+#[cfg(windows)]
 pub fn LOWORD(l: usize) -> usize {
     l & 0xffff
 }
 
+#[cfg(windows)]
 pub fn HIWORD(l: usize) -> usize {
     (l >> 16) & 0xffff
 }
@@ -133,6 +136,7 @@ pub fn exe_dir() -> path::PathBuf {
 }
 
 // the portable zip ships this file, such a folder is not an msi install and must never run one
+#[cfg(windows)]
 pub fn is_portable() -> bool {
     static PORTABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *PORTABLE.get_or_init(|| exe_dir().join(crate::constants::PORTABLE_MARKER).exists())
