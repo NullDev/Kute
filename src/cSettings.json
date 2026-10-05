@@ -13,6 +13,7 @@
     "autoDetectResult": {
         "name": "Last Auto-Detect Result",
         "id": "autoDetectResult",
+        "platforms": ["windows"],
         "description": "See what the last run measured and changed, and undo it",
         "type": "none",
         "category": "General",
