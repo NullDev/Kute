@@ -334,6 +334,15 @@ pub fn detach_browser(browser: &Browser) {
     }
 }
 
+// same path as the title bar's close button, WM_CLOSE asks cef first
+pub fn close_window(browser: &Browser) {
+    if let Some(window) = window_from_browser(browser) {
+        unsafe {
+            PostMessageW(Some(window.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)).ok();
+        }
+    }
+}
+
 pub fn close_all() {
     let windows: Vec<HWND> = OUR_WINDOWS.with_borrow(|w| w.clone());
     for hwnd in windows {

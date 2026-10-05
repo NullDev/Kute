@@ -136,6 +136,24 @@ wrap_request_handler! {
     struct KuteRequestHandler;
 
     impl RequestHandler {
+        fn on_before_browse(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            _request: Option<&mut Request>,
+            _user_gesture: ::std::os::raw::c_int,
+            _is_redirect: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int {
+            // before the page asks for its files, so a swap dropped into the folder applies on a plain reload
+            if let (Some(browser), Some(frame)) = (browser, frame)
+                && browser.is_popup() == 0
+                && frame.is_main() != 0
+            {
+                modules::swapper::rescan();
+            }
+            0
+        }
+
         fn resource_request_handler(
             &self,
             _browser: Option<&mut Browser>,
@@ -195,16 +213,25 @@ wrap_keyboard_handler! {
     }
 }
 
+// chrome/app/chrome_command_ids.h
+const IDC_CLOSE_WINDOW: ::std::os::raw::c_int = 34012;
+
 wrap_command_handler! {
     struct KuteCommandHandler;
 
     impl CommandHandler {
         fn on_chrome_command(
             &self,
-            _browser: Option<&mut Browser>,
-            _command_id: ::std::os::raw::c_int,
+            browser: Option<&mut Browser>,
+            command_id: ::std::os::raw::c_int,
             _disposition: WindowOpenDisposition,
         ) -> ::std::os::raw::c_int {
+            // alt+f4 is a chrome accelerator in a chrome style browser, it never reaches our window as WM_SYSCOMMAND
+            if command_id == IDC_CLOSE_WINDOW
+                && let Some(browser) = browser
+            {
+                window::close_window(browser);
+            }
             1
         }
     }

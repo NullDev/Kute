@@ -3,7 +3,10 @@ use std::{
     fs,
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock, Mutex, RwLock},
+    sync::{
+        Arc, LazyLock, Mutex, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     time::SystemTime,
 };
 
@@ -24,11 +27,17 @@ pub static SWAPS: LazyLock<RwLock<Arc<Index>>> = LazyLock::new(|| {
     } else {
         Vec::new()
     };
-    RwLock::new(Arc::new(build_index(&files)))
+    let index = build_index(&files);
+    PUBLISHED.store(signature_of(&files), Ordering::Release);
+    INITIALIZED.store(true, Ordering::Release);
+    RwLock::new(Arc::new(index))
 });
 
-// fingerprint of the published index, held during a reload so reloads run in order
-static PUBLISHED_FROM: Mutex<Option<u64>> = Mutex::new(None);
+// fingerprint (names, sizes, mtimes) of the published index, so a reload skips the read when nothing changed
+static PUBLISHED: AtomicU64 = AtomicU64::new(0);
+static INITIALIZED: AtomicBool = AtomicBool::new(false);
+// held during a reload so reloads run in order
+static RELOAD_LOCK: Mutex<()> = Mutex::new(());
 
 // every krunker.io path requested this session, lowercased -> original. used by the manager
 static SEEN: Mutex<BTreeMap<String, String>> = Mutex::new(BTreeMap::new());
@@ -82,21 +91,39 @@ fn build_index(files: &[Scanned]) -> Index {
     swaps
 }
 
-// manager thread only. skips the read if paths, sizes and mtimes are unchanged
-pub fn reload() {
-    let mut published_from = PUBLISHED_FROM.lock().unwrap();
-    let files = if utils::config("swapper", true) { scan() } else { Vec::new() };
+fn signature_of(files: &[Scanned]) -> u64 {
     let mut hasher = DefaultHasher::new();
     files.iter().for_each(|(relative, _, size, modified)| (relative, size, modified).hash(&mut hasher));
-    let signature = hasher.finish();
-    if *published_from == Some(signature) {
+    hasher.finish()
+}
+
+// manager thread. skips the read if paths, sizes and mtimes are unchanged
+pub fn reload() {
+    let _guard = RELOAD_LOCK.lock().unwrap();
+    reload_locked();
+}
+
+// ui thread, before a navigation: a file dropped into the folder has to apply on the next reload, not the next
+// start. skips while the startup scan or a manager reload still runs, those publish in a moment anyway
+pub fn rescan() {
+    if !INITIALIZED.load(Ordering::Acquire) {
+        return;
+    }
+    let Ok(_guard) = RELOAD_LOCK.try_lock() else { return };
+    reload_locked();
+}
+
+fn reload_locked() {
+    let files = if utils::config("swapper", true) { scan() } else { Vec::new() };
+    let signature = signature_of(&files);
+    if PUBLISHED.load(Ordering::Acquire) == signature {
         return;
     }
     let index = Arc::new(build_index(&files));
     // drop the old index outside the lock, freeing a big pack must not block requests
     let old = std::mem::replace(&mut *SWAPS.write().unwrap(), index);
     drop(old);
-    *published_from = Some(signature);
+    PUBLISHED.store(signature, Ordering::Release);
 }
 
 // "https://assets.krunker.io/textures/a.png?build=x" -> "textures/a.png"
