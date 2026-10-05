@@ -505,7 +505,7 @@
     "laptopPowerBoost": {
         "name": "Laptop Power Boost",
         "id": "laptopPowerBoost",
-        "description": "Plugged in laptops only: sets Windows' power mode to Best performance while Kute runs and puts yours back after",
+        "description": "Plugged in laptops only: switches the power mode to performance while Kute runs and puts yours back after",
         "type": "checkbox",
         "category": "Engine",
         "defaultValue": true,
