@@ -92,6 +92,12 @@ Same CEF branch, commit and Chromium version as above. Built in a WSL2 Ubuntu 24
    autoninja -C out/Release_GN_x64 libcef
    ```
 
+   1 h 45 min from scratch on a 12900K in WSL2 (63k steps), the link of `libcef.so` alone a few minutes.
+
+5. `strip --strip-unneeded` the result (525 MB to 282 MB) into `resources/cef-linux/libcef.so` and commit it (Git LFS). `postbuild.js` copies `resources/cef-linux/` over the stock runtime on Linux, `resources/cef/` on Windows.
+
+Checked in WSLg (2026-10-05): every Linux feature name is in the binary, `KuteRawInputMovementOnly` is not. With a limit of 30 and 60 the game page ran at exactly 30 and 60 FPS (median frame 33.3 and 16.7 ms), the stock `libcef.so` with the same flags at 348 and 251. WSLg cannot say anything about pacing or latency.
+
 ## How the patches were checked
 
 - 01 and 02: the aim freeze stress test (a 12 s mouse flood over CDP on a page that spends 3 ms of JavaScript per frame, next to a 60 Hz WebSocket). Stock CEF freezes WebSocket delivery for 7 to 12 s, the patched DLL keeps every gap under about 36 ms, with no frame rate cost.
