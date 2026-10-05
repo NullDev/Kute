@@ -261,6 +261,12 @@ pub fn load_flags() {
     *FLAGS.lock().unwrap() = flags;
 }
 
+// native wayland ties the pacing patch to the compositor's refresh (bench: 177 fps against 1359 on xwayland)
+#[cfg(target_os = "linux")]
+fn use_x11() -> bool {
+    config("displayServer", "X11".to_string()) == "X11" && std::env::var_os("DISPLAY").is_some_and(|display| !display.is_empty())
+}
+
 // one libcef patch with a feature switch (patches/README.md), toggled by a setting
 pub struct Patch {
     pub setting: &'static str,
@@ -523,6 +529,11 @@ wrap_app! {
             // chromium 151 shows a modal terms dialog on a linux first run (MasterPrefs::eula_required defaults to true)
             #[cfg(target_os = "linux")]
             cmd.append_switch(Some(&CefString::from("no-first-run")));
+            // after the flag loop, so an --ozone-platform from the command line or user_flags.json wins
+            #[cfg(target_os = "linux")]
+            if cmd.has_switch(Some(&CefString::from("ozone-platform"))) == 0 && use_x11() {
+                cmd.append_switch_with_value(Some(&CefString::from("ozone-platform")), Some(&CefString::from("x11")));
+            }
         }
     }
 }

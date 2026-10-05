@@ -420,6 +420,17 @@
         "needsRestart": true,
         "options": ["Default", "D3D11", "D3D11on12", "OpenGL", "Vulkan"]
     },
+    "displayServer": {
+        "name": "Display Server",
+        "id": "displayServer",
+        "platforms": ["linux"],
+        "description": "Leave it on X11, it runs much faster than Wayland for now. X11 also works inside a Wayland session",
+        "type": "select",
+        "category": "Advanced",
+        "defaultValue": "X11",
+        "needsRestart": true,
+        "options": ["X11", "Wayland"]
+    },
     "colorProfile": {
         "name": "Color Profile",
         "id": "colorProfile",
