@@ -703,6 +703,7 @@ dependencies = [
  "discord-rich-presence",
  "dns-lookup",
  "embed-resource",
+ "libc",
  "obs-kute-capture",
  "ping-rs",
  "regex",

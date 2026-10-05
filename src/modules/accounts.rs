@@ -4,6 +4,7 @@ use crate::utils;
 use cef::Browser;
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(windows)]
 use windows::core::w;
 
 const FILE_VERSION: u32 = 1;
@@ -62,8 +63,14 @@ fn save(accounts: &[Stored]) {
     }
 }
 
+#[cfg(windows)]
 fn protect(text: &str) -> Option<String> {
     dpapi::protect(text, ENTROPY, w!("kute account"))
+}
+
+#[cfg(target_os = "linux")]
+fn protect(text: &str) -> Option<String> {
+    dpapi::protect(text, ENTROPY, "kute account")
 }
 
 fn unprotect(text: &str) -> Option<String> {

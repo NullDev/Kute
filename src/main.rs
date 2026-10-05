@@ -10,38 +10,85 @@ mod bridge;
 mod config;
 mod constants;
 mod handlers;
+#[cfg(target_os = "linux")]
+mod linux;
 mod renderer;
 mod utils;
+#[cfg(windows)]
 mod window;
+#[cfg(target_os = "linux")]
+use linux::window;
 pub mod modules {
     pub mod accounts;
     pub mod bench;
     pub mod blocklist;
     pub mod custom_css;
+    #[cfg(windows)]
     pub mod dev;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::dev;
     pub mod devtools;
+    #[cfg(windows)]
     pub mod dpapi;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::dpapi;
     pub mod files;
     pub mod flaglist;
+    #[cfg(windows)]
     pub mod gpu;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::gpu;
     pub mod hotkeys;
     pub mod icons;
+    #[cfg(windows)]
     pub mod input;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::input;
     pub mod lifecycle;
+    #[cfg(windows)]
     pub mod load;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::load;
+    #[cfg(windows)]
     pub mod nvidia;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::nvidia;
+    #[cfg(windows)]
     pub mod obs;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::obs;
     pub mod ping;
+    #[cfg(windows)]
     pub mod power;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::power;
+    #[cfg(windows)]
     pub mod priority;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::priority;
+    #[cfg(windows)]
     pub mod render_hook;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::render_hook;
+    #[cfg(windows)]
     pub mod replay;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::replay;
     pub mod resource;
     pub mod skybox;
+    #[cfg(windows)]
     pub mod specs;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::specs;
+    #[cfg(windows)]
     pub mod spotify;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::spotify;
     pub mod swapper;
+    #[cfg(windows)]
     pub mod updater;
+    #[cfg(target_os = "linux")]
+    pub use crate::linux::updater;
     pub mod userscripts;
 }
 
@@ -133,6 +180,9 @@ fn main() {
     debug_print!("main: message loop ended");
     shutdown();
     debug_print!("main: cef shut down");
+
+    #[cfg(target_os = "linux")]
+    app::remove_frame_timing_mapping();
 
     // bench must not overwrite lastPosition
     if bench.is_none() {

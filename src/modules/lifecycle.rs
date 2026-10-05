@@ -1,10 +1,12 @@
 #![allow(dead_code)]
-use crate::{
-    constants,
-    utils::{self, create_utf_string},
-};
+use crate::utils;
+#[cfg(windows)]
+use crate::{constants, utils::create_utf_string};
 
-use std::{backtrace, env, ffi::c_void, fs, io, io::Read, panic, process};
+#[cfg(windows)]
+use std::ffi::c_void;
+use std::{backtrace, env, fs, io, io::Read, panic, process};
+#[cfg(windows)]
 use windows::{
     Win32::Foundation::*,
     Win32::System::{DataExchange::COPYDATASTRUCT, Threading::CreateMutexW},
@@ -64,6 +66,7 @@ pub fn set_panic_hook() -> io::Result<()> {
         }
         fs::write(&log_file_path, &crash_message).ok();
 
+        #[cfg(windows)]
         unsafe {
             let result = MessageBoxW(
                 None,
@@ -111,6 +114,9 @@ pub fn wait_for_previous_instance() {
     let Some(pid) = env::args().find_map(|arg| arg.strip_prefix(WAIT_PID_ARG).and_then(|pid| pid.parse::<u32>().ok())) else {
         return;
     };
+    #[cfg(target_os = "linux")]
+    crate::linux::instance::wait_for(pid);
+    #[cfg(windows)]
     unsafe {
         use windows::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
         if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
@@ -124,6 +130,12 @@ pub fn is_internal_arg(arg: &str) -> bool {
     arg.starts_with(WAIT_PID_ARG)
 }
 
+#[cfg(target_os = "linux")]
+pub fn register_instance() {
+    crate::linux::instance::register();
+}
+
+#[cfg(windows)]
 pub fn register_instance() {
     unsafe {
         CreateMutexW(None, false, PCWSTR(create_utf_string(constants::INSTANCE_MUTEX).as_ptr())).ok();

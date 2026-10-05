@@ -79,6 +79,9 @@ windows = { version = "0.62.2", features = [
 obs-kute-capture = { path = "crates/obs-kute-capture", optional = true }
 render-dll = { path = "crates/render-dll", optional = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.*"
+
 [build-dependencies]
 embed-resource = "3.0.*"
 toml = "1.1.*"

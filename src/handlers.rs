@@ -2,6 +2,11 @@ use crate::{app, bridge, constants, debug_print, modules, utils, utils::config, 
 use cef::{rc::*, *};
 use std::sync::{LazyLock, Mutex, mpsc};
 
+#[cfg(windows)]
+type OsKeyEvent = sys::MSG;
+#[cfg(target_os = "linux")]
+type OsKeyEvent = sys::XEvent;
+
 // args from a second instance while the main window gets recreated
 static PENDING_ARGS: Mutex<Option<String>> = Mutex::new(None);
 
@@ -198,7 +203,7 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: Option<&mut sys::MSG>,
+            _os_event: Option<&mut OsKeyEvent>,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
@@ -664,7 +669,10 @@ pub fn open_documents_subpath(target: &str) {
         }
         _ => return,
     };
+    #[cfg(windows)]
     std::process::Command::new("explorer.exe").arg(path_to_open).spawn().ok();
+    #[cfg(target_os = "linux")]
+    crate::linux::sys::open(path_to_open);
 }
 
 pub fn open_in_default_browser(url: &str) {
@@ -674,10 +682,15 @@ pub fn open_in_default_browser(url: &str) {
     if !allowed || url.chars().any(|c| c.is_whitespace() || c == '"') {
         return;
     }
-    use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
-    let url = windows::core::HSTRING::from(url);
-    unsafe {
-        ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL);
+    #[cfg(target_os = "linux")]
+    crate::linux::sys::open(url);
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+        let url = windows::core::HSTRING::from(url);
+        unsafe {
+            ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL);
+        }
     }
 }
 

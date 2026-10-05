@@ -4,6 +4,7 @@ use std::{
     convert, env, fs, io,
     path::{self, *},
 };
+#[cfg(windows)]
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM},
@@ -32,8 +33,19 @@ pub fn HIWORD(l: usize) -> usize {
     (l >> 16) & 0xffff
 }
 
+#[cfg(windows)]
 pub fn settings_dir() -> path::PathBuf {
     path::PathBuf::from(env::var("USERPROFILE").unwrap()).join("Documents").join("kute")
+}
+
+// $XDG_CONFIG_HOME/kute, the linux counterpart of Documents\kute
+#[cfg(target_os = "linux")]
+pub fn settings_dir() -> path::PathBuf {
+    env::var_os("XDG_CONFIG_HOME")
+        .filter(|dir| !dir.is_empty())
+        .map(path::PathBuf::from)
+        .unwrap_or_else(|| path::PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".config"))
+        .join("kute")
 }
 
 // refuses stuff like `https://krunker.io:pw@example.com/`
@@ -62,6 +74,19 @@ pub fn api_url() -> String {
         .unwrap_or_else(|_| crate::constants::API_URL.to_string())
 }
 
+#[cfg(target_os = "linux")]
+pub fn downloads_dir() -> path::PathBuf {
+    std::process::Command::new("xdg-user-dir")
+        .arg("DOWNLOAD")
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|dir| !dir.is_empty())
+        .map(path::PathBuf::from)
+        .unwrap_or_else(|| path::PathBuf::from(env::var_os("HOME").unwrap_or_default()).join("Downloads"))
+}
+
+#[cfg(windows)]
 pub fn downloads_dir() -> path::PathBuf {
     unsafe {
         if let Ok(folder) = SHGetKnownFolderPath(&FOLDERID_Downloads, KF_FLAG_DEFAULT, None) {
@@ -137,6 +162,8 @@ pub fn has_arg(wanted: &str) -> bool {
 
 // chromium only reads --raise-timer-frequency in chrome_main.cc, so every process does it itself
 pub fn raise_timer_frequency() {
+    // linux timers are not tick based, nothing to raise
+    #[cfg(windows)]
     unsafe {
         windows::Win32::Media::timeBeginPeriod(1);
     }
@@ -152,6 +179,7 @@ pub fn cef_str(value: Option<&cef::CefString>) -> String {
 }
 
 // substring match on the class name. chromium keeps spare widget windows, so the largest one wins
+#[cfg(windows)]
 pub fn find_child_window_by_class(parent: HWND, class_name: &str) -> HWND {
     let mut data = (HWND::default(), class_name, 0i64);
 
@@ -209,12 +237,15 @@ macro_rules! debug_print {
         if cfg!(feature = "verbose-logs") {
             let msg = format!($($arg)*);
             eprintln!("{msg}");
+            #[cfg(windows)]
+            {
             let wide: Vec<u16> = msg.encode_utf16().chain(Some(0)).collect();
             #[allow(unused_unsafe)]
             unsafe {
                 ::windows::Win32::System::Diagnostics::Debug::OutputDebugStringW(
                     ::windows::core::PCWSTR(wide.as_ptr()),
                 );
+            }
             }
         }
     };

@@ -9,8 +9,11 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+#[cfg(windows)]
 use windows::Win32::Foundation::*;
+#[cfg(windows)]
 use windows::Win32::System::Memory::*;
+#[cfg(windows)]
 use windows::core::*;
 
 pub fn init_fs() -> result::Result<(), io::Error> {
@@ -60,12 +63,54 @@ macro_rules! shared {
     }};
 }
 
-// render.dll opens this in the gpu process, so it has to exist before initialize()
-pub fn create_frame_timing_mapping() {
-    let fps_limit = match modules::bench::config() {
+fn initial_fps_limit() -> u64 {
+    match modules::bench::config() {
         Some(bench) => bench.limit,
         None => config("gameFpsLimit", 0),
+    }
+}
+
+// posix shm "/<name>", patch 09 opens it by name in the gpu process. a crash leaves 104 bytes in /dev/shm, the next start reuses them
+#[cfg(target_os = "linux")]
+pub fn create_frame_timing_mapping() {
+    let Ok(name) = std::ffi::CString::new(format!("/{}", modules::bench::timing_mapping_name())) else {
+        return;
     };
+    unsafe {
+        let fd = libc::shm_open(name.as_ptr(), libc::O_CREAT | libc::O_RDWR, 0o600);
+        if fd < 0 {
+            return;
+        }
+        if libc::ftruncate(fd, SHARED_STATS_SIZE as libc::off_t) == 0 {
+            let view = libc::mmap(
+                std::ptr::null_mut(),
+                SHARED_STATS_SIZE,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                fd,
+                0,
+            );
+            if view != libc::MAP_FAILED {
+                std::ptr::write_bytes(view as *mut u8, 0, SHARED_STATS_SIZE);
+                SHARED_STATS_PTR.store(view as u64, Ordering::SeqCst);
+                set_target_fps(initial_fps_limit());
+            }
+        }
+        libc::close(fd);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn remove_frame_timing_mapping() {
+    if let Ok(name) = std::ffi::CString::new(format!("/{}", modules::bench::timing_mapping_name())) {
+        unsafe { libc::shm_unlink(name.as_ptr()) };
+    }
+}
+
+// render.dll opens this in the gpu process, so it has to exist before initialize()
+#[cfg(windows)]
+pub fn create_frame_timing_mapping() {
+    let fps_limit = initial_fps_limit();
     let name = HSTRING::from(modules::bench::timing_mapping_name());
     unsafe {
         if let Ok(mapping) = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, SHARED_STATS_SIZE as u32, &name) {
@@ -474,6 +519,9 @@ wrap_app! {
             // otherwise chromium restores the last session in its own window
             cmd.append_switch(Some(&CefString::from("no-startup-window")));
             cmd.append_switch(Some(&CefString::from("hide-crash-restore-bubble")));
+            // chromium 151 shows a modal terms dialog on a linux first run (MasterPrefs::eula_required defaults to true)
+            #[cfg(target_os = "linux")]
+            cmd.append_switch(Some(&CefString::from("no-first-run")));
         }
     }
 }
