@@ -64,7 +64,9 @@ document.addEventListener(
             window.chrome.webview.postMessage("drag, false");
             window.chrome.webview.postMessage("throttle, game");
 
-            return original.call(this, { ...args[0], unadjustedMovement: kute?.settings?.data?.rawInput });
+            // chromium has no unadjustedMovement on linux, asking for it rejects the lock (krunker's own raw mouse too)
+            const unadjustedMovement = kute.platform !== "linux" && kute?.settings?.data?.rawInput;
+            return original.call(this, { ...args[0], unadjustedMovement });
         });
 
         document.addEventListener("pointerlockchange", () => {

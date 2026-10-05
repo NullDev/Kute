@@ -38,6 +38,7 @@ const BLOCKED_STYLE = "opacity: 0.35; cursor: not-allowed";
 // inside the onclick of krunker's own raw mouse switch, see lockRawMouse
 const RAW_MOUSE_SETTING = "window.setSetting(\"rawMouse\"";
 const RAW_MOUSE_HINT = "Controlled by Kute's Raw Input setting";
+const RAW_MOUSE_HINT_LINUX = "Not available on Linux";
 
 const settings = /** @type {Record<string, SettingOption>} */ (cSettings);
 
@@ -349,9 +350,10 @@ class SettingsManager {
         // the label has to be the one around this input, otherwise the markup is not what we expect any more
         if (labelEnd < 0 || labelEnd > tagStart) return html;
         const input = html.slice(tagStart, tagEnd).replace(/\s+checked\b/, "")
-            + (kute.settings.data.rawInput ? " checked" : "") + " disabled>";
+            + (kute.settings.data.rawInput && kute.platform !== "linux" ? " checked" : "") + " disabled>";
         // the tooltip goes on the label: a disabled input takes no pointer events, so the hover lands there
-        return html.slice(0, labelEnd) + ` title="${RAW_MOUSE_HINT}">`
+        const hint = kute.platform === "linux" ? RAW_MOUSE_HINT_LINUX : RAW_MOUSE_HINT;
+        return html.slice(0, labelEnd) + ` title="${hint}">`
             + html.slice(labelEnd + 1, tagStart) + input + html.slice(tagEnd + 1);
     }
 

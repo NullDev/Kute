@@ -89,6 +89,7 @@
     "rawInput": {
         "name": "Raw Input",
         "id": "rawInput",
+        "platforms": ["windows"],
         "description": "Mouse movement comes straight from the device, without Windows pointer acceleration, and all of it reaches the game, also when you click or scroll mid-flick. Krunker's own Raw Mouse Input follows this setting",
         "type": "checkbox",
         "category": "Game",
