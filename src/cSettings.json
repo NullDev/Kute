@@ -594,7 +594,6 @@
     "checkUpdates": {
         "name": "Check For Updates",
         "id": "checkUpdates",
-        "platforms": ["windows"],
         "description": "Looks for a new Kute version when it starts",
         "type": "checkbox",
         "category": "About",
