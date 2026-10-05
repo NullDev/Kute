@@ -72,7 +72,6 @@
     "accountManager": {
         "name": "Account Manager",
         "id": "accountManager",
-        "platforms": ["windows"],
         "description": "Save your Krunker accounts and switch between them from the menu",
         "type": "checkbox",
         "category": "General",

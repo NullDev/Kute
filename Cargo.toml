@@ -80,7 +80,9 @@ obs-kute-capture = { path = "crates/obs-kute-capture", optional = true }
 render-dll = { path = "crates/render-dll", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+aes-gcm = "0.10.*"
 libc = "0.2.*"
+sha2 = "0.10.*"
 zbus = "5.*"
 
 [build-dependencies]
