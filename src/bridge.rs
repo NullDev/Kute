@@ -69,7 +69,10 @@ fn host_features() -> serde_json::Value {
         "performance-mode",
         "cef-patches",
         "hotkeys",
-        "appimage-update"
+        "appimage-update",
+        "hybrid-gpu",
+        "x3d-cores",
+        "load-sample"
     ])
 }
 
