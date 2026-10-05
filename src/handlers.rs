@@ -1023,6 +1023,11 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
                 }
             }
         }
+        // linux: the page swallowed a wheel tick while locked (rampBoost.js), windows never sends this
+        #[cfg(target_os = "linux")]
+        ["ramp-wheel", direction] => {
+            modules::input::ramp_wheel(browser, direction.parse::<i32>().unwrap_or(0) > 0);
+        }
         ["toggle-rboost", value] => {
             let value = value.parse::<bool>().unwrap_or(false);
             modules::input::set_rampboost(value);

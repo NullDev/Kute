@@ -2,6 +2,7 @@ import cSettings from "../cSettings.json";
 import { kute, globalRef } from "./client.js";
 import { getElement, getInput, checkCompMode } from "./utils.js";
 import { hiddenByPerformance, overridePerformance } from "./performance.js";
+import { setRampBoost } from "./modules/rampBoost.js";
 
 /**
  * a cSettings.json entry
@@ -228,9 +229,9 @@ kute.settings.changeSetting = (id, rawValue, slider) => {
             break;
         case "rampBoost":
             if (value){
-                if (!checkCompMode()) window.chrome.webview.postMessage("toggle-rboost, true");
+                if (!checkCompMode()) setRampBoost(true);
             }
-            else window.chrome.webview.postMessage("toggle-rboost, false");
+            else setRampBoost(false);
             break;
         default:
             applyInterface(id, value);

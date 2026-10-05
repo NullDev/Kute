@@ -99,7 +99,6 @@
     "rampBoost": {
         "name": "Ramp Boosting",
         "id": "rampBoost",
-        "platforms": ["windows"],
         "description": "Scrolling makes you jump, for easier ramp boosts. Off in competitive. Turn it off if another tool already does this",
         "type": "checkbox",
         "category": "Game",

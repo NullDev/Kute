@@ -70,6 +70,7 @@ fn host_features() -> serde_json::Value {
         "cef-patches",
         "hotkeys",
         "appimage-update",
+        "ramp-boost",
         "hybrid-gpu",
         "x3d-cores",
         "load-sample"

@@ -1,6 +1,7 @@
 import styles from "./components/base.css";
 import { kute, ready, globalRef } from "./client.js";
 import { hook, getElement, checkCompMode } from "./utils.js";
+import { setRampBoost } from "./modules/rampBoost.js";
 // imported first so later throws still get reported
 import { postUrls as postIconUrls } from "./modules/kuteIcons/slots.js";
 // static import: the host only hands over the userscript registry during bundle eval
@@ -204,7 +205,7 @@ Object.defineProperty(window, "gameLoaded", {
         if (kute.hostFeatures?.includes("appimage-update")) import("./modules/linuxUpdate.js").catch(() => {});
 
         if (kute?.settings?.data?.rampBoost && !checkCompMode()){
-            window.chrome.webview.postMessage("toggle-rboost, true");
+            setRampBoost(true);
 
             /**
              * @param {MessageEvent} event
@@ -214,7 +215,7 @@ Object.defineProperty(window, "gameLoaded", {
                     setTimeout(() => {
                         if (checkCompMode()){
                             window.chrome.webview.removeEventListener("message", gameUpdateListener);
-                            window.chrome.webview.postMessage("toggle-rboost, false");
+                            setRampBoost(false);
                         }
                     }, 2000);
                 }
