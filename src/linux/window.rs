@@ -341,9 +341,18 @@ pub fn main_window_active() -> bool {
     MAIN_ACTIVE.load(Ordering::Relaxed)
 }
 
-// x11 window id, unused by the linux specs and replay
+// x11 window id (0 on native wayland), read by specs and the input replay
 pub fn root_hwnd(browser: &Browser) -> Option<u64> {
     window_of(browser).map(|window| window.window_handle())
+}
+
+// physical px per css px of the screen the window is on
+pub fn device_scale(browser: &Browser) -> f64 {
+    window_of(browser)
+        .and_then(|window| window.display())
+        .map(|display| display.device_scale_factor() as f64)
+        .filter(|scale| *scale > 0.0)
+        .unwrap_or(1.0)
 }
 
 // a hidden page stops rendering

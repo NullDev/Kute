@@ -19,8 +19,8 @@ const FIRE_MS: u64 = 400;
 const RELEASE_MS: u64 = 100;
 // a page that stalled never sends the stop
 const LONGEST_MS: u64 = 8000;
-// where the virtual cursor starts, only differences reach a locked page
-const ORIGIN: (f64, f64) = (600.0, 400.0);
+// circle center when the real cursor cannot be read (native wayland)
+const FALLBACK_ORIGIN: (f64, f64) = (600.0, 400.0);
 
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
@@ -59,13 +59,27 @@ fn send(browser_id: i32, step: Step, (x, y): (f64, f64), held: bool) {
     post_task(ThreadId::UI, Some(&mut task));
 }
 
+// the real cursor in the window, css px. chromium's locked movementX/Y is the difference to the last position it knows,
+// which is the real cursor's: a circle from anywhere else turned the view by that gap at the start and back at the
+// next real move (measured 319 counts each way on the owner's pc)
+fn real_cursor(window: u64, scale: f64) -> Option<(f64, f64)> {
+    use x11rb::protocol::xproto::ConnectionExt as _;
+    let window = u32::try_from(window).ok().filter(|&window| window != 0)?;
+    let (connection, _) = x11rb::connect(None).ok()?;
+    let pointer = connection.query_pointer(window).ok()?.reply().ok()?;
+    pointer.same_screen.then(|| (pointer.win_x as f64 / scale, pointer.win_y as f64 / scale))
+}
+
 // the page gets `{inputReplay: {sent, reason}}` when a script ends: a report without pointer events has to say why
-pub fn start(_window: u64, browser_id: i32, ms: u64) {
+pub fn start(window: u64, browser_id: i32, ms: u64) {
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let ms = ms.min(LONGEST_MS);
+    let scale = window::browser_by_id(browser_id).map(|browser| window::device_scale(&browser)).unwrap_or(1.0);
+    // the circle starts and ends on the real cursor
+    let origin = real_cursor(window, scale).map(|(x, y)| (x - RADIUS, y)).unwrap_or(FALLBACK_ORIGIN);
     thread::spawn(move || {
         let started = Instant::now();
-        let mut position = (ORIGIN.0 + RADIUS, ORIGIN.1);
+        let mut position = (origin.0 + RADIUS, origin.1);
         let mut fire = false;
         let mut sent = 0u64;
         send(browser_id, Step::Move, position, false);
@@ -85,7 +99,7 @@ pub fn start(_window: u64, browser_id: i32, ms: u64) {
             }
             let angle = TAU * (elapsed % CIRCLE_MS) as f64 / CIRCLE_MS as f64;
             // absolute points on the circle: the rounding of one step never carries into the next
-            let target = (ORIGIN.0 + RADIUS * angle.cos(), ORIGIN.1 + RADIUS * angle.sin());
+            let target = (origin.0 + RADIUS * angle.cos(), origin.1 + RADIUS * angle.sin());
             position = (target.0.round(), target.1.round());
             send(browser_id, Step::Move, position, fire);
             let want_fire = elapsed % (FIRE_MS + RELEASE_MS) < FIRE_MS;
@@ -98,7 +112,7 @@ pub fn start(_window: u64, browser_id: i32, ms: u64) {
         };
         // back to where the circle began so readings never drift the view; the button is always released
         if matches!(reason, "done" | "stopped") && input::pointer_locked() {
-            send(browser_id, Step::Move, (ORIGIN.0 + RADIUS, ORIGIN.1), fire);
+            send(browser_id, Step::Move, (origin.0 + RADIUS, origin.1), fire);
         }
         if fire {
             send(browser_id, Step::Release, position, false);
