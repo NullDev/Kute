@@ -85,6 +85,17 @@ fn creation_state(start_mode: &str, init_state: Option<WindowState>) -> WindowSt
     }
 }
 
+// cef-rs writes an owned CefString in an out-parameter struct back as an empty string (cef 151.5.0, string.rs),
+// only a borrowed one survives. leaked once per window, cef copies it and has no destructor to call
+fn borrowed_cef_string(text: &str) -> CefString {
+    let utf16: &'static [u16] = Box::leak(text.encode_utf16().collect::<Vec<u16>>().into_boxed_slice());
+    CefString::from(sys::_cef_string_utf16_t {
+        str_: utf16.as_ptr() as *mut _,
+        length: utf16.len(),
+        dtor: None,
+    })
+}
+
 fn window_icon() -> Option<Image> {
     let image = image_create()?;
     (image.add_png(1.0, Some(ICON_PNG)) != 0).then_some(image)
@@ -186,9 +197,9 @@ wrap_window_delegate! {
         fn linux_window_properties(&self, _window: Option<&mut Window>, properties: Option<&mut LinuxWindowProperties>) -> ::std::os::raw::c_int {
             let Some(properties) = properties else { return 0 };
             let class = if modules::bench::active() { "kute-bench" } else { "kute" };
-            properties.wayland_app_id = CefString::from(class);
-            properties.wm_class_class = CefString::from("Kute");
-            properties.wm_class_name = CefString::from(class);
+            properties.wayland_app_id = borrowed_cef_string(class);
+            properties.wm_class_class = borrowed_cef_string("Kute");
+            properties.wm_class_name = borrowed_cef_string(class);
             1
         }
     }
