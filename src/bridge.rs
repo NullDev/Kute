@@ -61,6 +61,7 @@ fn host_features() -> serde_json::Value {
         "kute-icons",
         "script-manager",
         "audio-fix",
+        "spotify",
         "custom-css",
         "swapper-editor",
         "custom-sky",

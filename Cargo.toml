@@ -81,6 +81,7 @@ render-dll = { path = "crates/render-dll", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2.*"
+zbus = "5.*"
 
 [build-dependencies]
 embed-resource = "3.0.*"
