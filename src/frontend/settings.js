@@ -2,6 +2,7 @@ import cSettings from "../cSettings.json";
 import { kute, globalRef } from "./client.js";
 import { getElement, getInput, checkCompMode } from "./utils.js";
 import { hiddenByPerformance, overridePerformance } from "./performance.js";
+import { setRampBoost } from "./modules/rampBoost.js";
 
 /**
  * a cSettings.json entry
@@ -21,6 +22,7 @@ import { hiddenByPerformance, overridePerformance } from "./performance.js";
  * @property {string} [requires] id of a checkbox setting this one depends on, disabled while that is off
  * @property {string} [disabledBy] id of a checkbox setting that forces this one off while on, the stored value stays
  * @property {string} [hostFeature] hostFeatures entry the exe must list, the setting is not shown without it
+ * @property {string[]} [platforms] Only shown on these ("windows", "linux"), an exe that reports no platform is windows
  * @property {boolean|null} [performance] Value while performance mode is on, the row is hidden then. null only hides it
  * @property {number} [min]
  * @property {number} [max]
@@ -37,6 +39,7 @@ const BLOCKED_STYLE = "opacity: 0.35; cursor: not-allowed";
 // inside the onclick of krunker's own raw mouse switch, see lockRawMouse
 const RAW_MOUSE_SETTING = "window.setSetting(\"rawMouse\"";
 const RAW_MOUSE_HINT = "Controlled by Kute's Raw Input setting";
+const RAW_MOUSE_HINT_LINUX = "Not available on Linux";
 
 const settings = /** @type {Record<string, SettingOption>} */ (cSettings);
 
@@ -226,9 +229,9 @@ kute.settings.changeSetting = (id, rawValue, slider) => {
             break;
         case "rampBoost":
             if (value){
-                if (!checkCompMode()) window.chrome.webview.postMessage("toggle-rboost, true");
+                if (!checkCompMode()) setRampBoost(true);
             }
-            else window.chrome.webview.postMessage("toggle-rboost, false");
+            else setRampBoost(false);
             break;
         default:
             applyInterface(id, value);
@@ -348,9 +351,10 @@ class SettingsManager {
         // the label has to be the one around this input, otherwise the markup is not what we expect any more
         if (labelEnd < 0 || labelEnd > tagStart) return html;
         const input = html.slice(tagStart, tagEnd).replace(/\s+checked\b/, "")
-            + (kute.settings.data.rawInput ? " checked" : "") + " disabled>";
+            + (kute.settings.data.rawInput && kute.platform !== "linux" ? " checked" : "") + " disabled>";
         // the tooltip goes on the label: a disabled input takes no pointer events, so the hover lands there
-        return html.slice(0, labelEnd) + ` title="${RAW_MOUSE_HINT}">`
+        const hint = kute.platform === "linux" ? RAW_MOUSE_HINT_LINUX : RAW_MOUSE_HINT;
+        return html.slice(0, labelEnd) + ` title="${hint}">`
             + html.slice(labelEnd + 1, tagStart) + input + html.slice(tagEnd + 1);
     }
 
@@ -447,6 +451,7 @@ class SettingsManager {
         for (const setting of Object.values(settings)){
             // an exe older than the setting would store the value and ignore it
             if (setting.hostFeature && !kute.hostFeatures?.includes(setting.hostFeature)) continue;
+            if (setting.platforms && !setting.platforms.includes(kute.platform ?? "windows")) continue;
             if (hiddenByPerformance(kute.settings.data, setting.id)) continue;
             if (this.settingsWindow.settingSearch && !this.searchMatches(setting)) continue;
 

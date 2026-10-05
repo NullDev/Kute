@@ -24,7 +24,8 @@ export const PIPELINE = [
     { setting: "patchFramePacing", key: "pacing", label: "Frame Pacing" },
     { setting: "patchCanvasBufferCache", key: "canvas", label: "WebGL Buffer Cache" },
     { setting: "patchHighQoS", key: "qos", label: "Game Process at High QoS" },
-];
+// linux measures presents in viz (patch 10, always on) and its libcef has no patch 07: both flips would only measure noise
+].filter((entry) => kute.platform !== "linux" || (entry.setting !== "hardFlip" && entry.setting !== "patchHighQoS"));
 /** copied into every bench so it runs like the client does, never flipped */
 const MIRRORED = [
     { setting: "patchInputPriority", key: "inprio", fallback: true },

@@ -9,8 +9,11 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
+#[cfg(windows)]
 use windows::Win32::Foundation::*;
+#[cfg(windows)]
 use windows::Win32::System::Memory::*;
+#[cfg(windows)]
 use windows::core::*;
 
 pub fn init_fs() -> result::Result<(), io::Error> {
@@ -60,12 +63,54 @@ macro_rules! shared {
     }};
 }
 
-// render.dll opens this in the gpu process, so it has to exist before initialize()
-pub fn create_frame_timing_mapping() {
-    let fps_limit = match modules::bench::config() {
+fn initial_fps_limit() -> u64 {
+    match modules::bench::config() {
         Some(bench) => bench.limit,
         None => config("gameFpsLimit", 0),
+    }
+}
+
+// posix shm "/<name>", patch 09 opens it by name in the gpu process. a crash leaves 104 bytes in /dev/shm, the next start reuses them
+#[cfg(target_os = "linux")]
+pub fn create_frame_timing_mapping() {
+    let Ok(name) = std::ffi::CString::new(format!("/{}", modules::bench::timing_mapping_name())) else {
+        return;
     };
+    unsafe {
+        let fd = libc::shm_open(name.as_ptr(), libc::O_CREAT | libc::O_RDWR, 0o600);
+        if fd < 0 {
+            return;
+        }
+        if libc::ftruncate(fd, SHARED_STATS_SIZE as libc::off_t) == 0 {
+            let view = libc::mmap(
+                std::ptr::null_mut(),
+                SHARED_STATS_SIZE,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED,
+                fd,
+                0,
+            );
+            if view != libc::MAP_FAILED {
+                std::ptr::write_bytes(view as *mut u8, 0, SHARED_STATS_SIZE);
+                SHARED_STATS_PTR.store(view as u64, Ordering::SeqCst);
+                set_target_fps(initial_fps_limit());
+            }
+        }
+        libc::close(fd);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn remove_frame_timing_mapping() {
+    if let Ok(name) = std::ffi::CString::new(format!("/{}", modules::bench::timing_mapping_name())) {
+        unsafe { libc::shm_unlink(name.as_ptr()) };
+    }
+}
+
+// render.dll opens this in the gpu process, so it has to exist before initialize()
+#[cfg(windows)]
+pub fn create_frame_timing_mapping() {
+    let fps_limit = initial_fps_limit();
     let name = HSTRING::from(modules::bench::timing_mapping_name());
     unsafe {
         if let Ok(mapping) = CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, SHARED_STATS_SIZE as u32, &name) {
@@ -127,6 +172,7 @@ pub fn take_present_intervals() -> Option<(u64, u64, u64, u64, u64)> {
 }
 
 // luid of the adapter the game's swap chain was created on, 0 without the hook or before the first chain
+#[cfg(windows)]
 pub fn render_adapter() -> u64 {
     shared!(render_adapter).map(|field| field.load(Ordering::Relaxed)).unwrap_or(0)
 }
@@ -136,7 +182,11 @@ pub fn render_adapter() -> u64 {
 // as chromium made it. installUs: what installing took. modifiedChains / stockChains: what chromium got since attach
 pub fn hook_state() -> serde_json::Value {
     // a bench overrides the setting through the env, like render_hook::load
+    #[cfg(windows)]
     let loaded = modules::bench::hook_override().unwrap_or_else(|| *HOOK_AT_START.get().unwrap_or(&true));
+    // patch 10 measures in viz, always on: a clock read per frame, nothing to switch off like the hook
+    #[cfg(target_os = "linux")]
+    let loaded = true;
     if !loaded {
         return serde_json::json!({ "state": "off" });
     }
@@ -206,6 +256,9 @@ pub fn load_flags() {
     if config("disableOnlineFeatures", false) {
         flags.push("--host-resolver-rules=MAP kute.lol ~NOTFOUND, MAP *.kute.lol ~NOTFOUND".to_string());
     }
+    // present stats from viz (patch 10), what render.dll's hook measures on windows
+    #[cfg(target_os = "linux")]
+    flags.push("--enable-features=KutePresentStats".to_string());
     // a bench decides its patches itself (bench::flags), the settings decide for the client
     if modules::bench::config().is_none() {
         for patch in PATCHES {
@@ -213,6 +266,12 @@ pub fn load_flags() {
         }
     }
     *FLAGS.lock().unwrap() = flags;
+}
+
+// native wayland ties the pacing patch to the compositor's refresh (bench: 177 fps against 1359 on xwayland)
+#[cfg(target_os = "linux")]
+fn use_x11() -> bool {
+    config("displayServer", "X11".to_string()) == "X11" && std::env::var_os("DISPLAY").is_some_and(|display| !display.is_empty())
 }
 
 // one libcef patch with a feature switch (patches/README.md), toggled by a setting
@@ -474,6 +533,14 @@ wrap_app! {
             // otherwise chromium restores the last session in its own window
             cmd.append_switch(Some(&CefString::from("no-startup-window")));
             cmd.append_switch(Some(&CefString::from("hide-crash-restore-bubble")));
+            // chromium 151 shows a modal terms dialog on a linux first run (MasterPrefs::eula_required defaults to true)
+            #[cfg(target_os = "linux")]
+            cmd.append_switch(Some(&CefString::from("no-first-run")));
+            // after the flag loop, so an --ozone-platform from the command line or user_flags.json wins
+            #[cfg(target_os = "linux")]
+            if cmd.has_switch(Some(&CefString::from("ozone-platform"))) == 0 && use_x11() {
+                cmd.append_switch_with_value(Some(&CefString::from("ozone-platform")), Some(&CefString::from("x11")));
+            }
         }
     }
 }

@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#020707" />
-    <meta name="description" content="Kute is a Krunker client for Windows: bundled and patched Chromium, uncapped FPS with an exact limiter, raw input, Auto-Detect, matchmaker, OBS capture and more." />
+    <meta name="description" content="Kute is a Krunker client for Windows and Linux: bundled and patched Chromium, uncapped FPS with an exact limiter, raw input, Auto-Detect, matchmaker, OBS capture and more." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://kute.lol/" />
     <meta property="og:title" content="Kute - Krunker client" />
-    <meta property="og:description" content="Krunker client for Windows. Uncapped FPS, raw input, Auto-Detect, matchmaker, OBS capture and more." />
+    <meta property="og:description" content="Krunker client for Windows and Linux. Uncapped FPS, raw input, Auto-Detect, matchmaker, OBS capture and more." />
     <meta property="og:image" content="https://kute.lol/assets/kute-icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <title>Kute - Krunker client</title>
@@ -89,11 +89,11 @@
               <b>Download <em>(Windows)</em></b>
               <span class="launch-icon" aria-hidden="true">↓</span>
             </a>
-            <span class="launch-action launch-disabled" aria-disabled="true">
+            <a class="launch-action" href="https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage" target="_blank" rel="noreferrer">
               <span class="launch-index">02 / LINUX</span>
               <b>Download <em>(Linux)</em></b>
-              <span class="launch-soon">SOON™</span>
-            </span>
+              <span class="launch-icon" aria-hidden="true">↓</span>
+            </a>
             <a class="launch-action" href="https://discord.com/invite/MUJbP3fXrS" target="_blank" rel="noreferrer">
               <span class="launch-index">03 / COMMUNITY</span>
               <b>Discord</b>
@@ -251,6 +251,10 @@
           <details class="faq-item reveal">
             <summary>Is there a portable version?</summary>
             <p>Yes, the <a href="https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64-portable.zip" target="_blank" rel="noreferrer">portable zip</a>. Unpack it anywhere and start <b>kute.exe</b>, nothing gets installed. Settings and scripts still live in <b>Documents\kute</b>, shared with an installed Kute. Small updates apply by themselves. When a new client version is out, Kute asks and opens the download page, then replace the folder with the new zip.</p>
+          </details>
+          <details class="faq-item reveal">
+            <summary>Does it run on Linux?</summary>
+            <p>Yes, as an <a href="https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage" target="_blank" rel="noreferrer">AppImage</a> for 64-bit Linux (glibc 2.35 or newer: Ubuntu 22.04, Debian 12, Fedora 36 and later, Arch). Make it executable and start it, it updates itself and keeps its settings in <b>~/.config/kute</b>. It runs through X11 (XWayland in a Wayland session) by default, which is much faster than native Wayland for now. Linux applies your desktop's mouse acceleration to the game: for raw input set your mouse to the <b>Flat</b> profile at speed <b>0</b>. Not on Linux: the OBS plugin (OBS's PipeWire capture records the game), the swapchain hook, the NVIDIA profile and the graphics backend choice.</p>
           </details>
           <details class="faq-item reveal">
             <summary>My FPS is lower, but the client is smoother</summary>
@@ -434,7 +438,8 @@
           Download Kute <span aria-hidden="true">↓</span>
         </a>
         <a class="cta-alt" href="https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64-portable.zip" target="_blank" rel="noreferrer">or get the portable zip ↓</a>
-        <div class="cta-meta"><span>WINDOWS 10 / 11</span><span>64-BIT</span><span>UPDATES ITSELF</span></div>
+        <a class="cta-alt" href="https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage" target="_blank" rel="noreferrer">or the Linux AppImage ↓</a>
+        <div class="cta-meta"><span>WINDOWS 10 / 11</span><span>LINUX</span><span>64-BIT</span><span>UPDATES ITSELF</span></div>
       </section>
     </main>
 

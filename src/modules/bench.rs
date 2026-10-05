@@ -148,7 +148,13 @@ fn limiter_patch() -> usize {
         .expect("patch 08 is in PATCHES")
 }
 
+#[cfg(target_os = "linux")]
+fn process_tree_cpu_ms() -> u64 {
+    crate::linux::sys::process_tree_cpu_ms()
+}
+
 // cpu time of this process and its children (gpu, renderer, utilities), ms
+#[cfg(windows)]
 fn process_tree_cpu_ms() -> u64 {
     use windows::Win32::System::Diagnostics::ToolHelp::*;
     use windows::Win32::System::Threading::*;

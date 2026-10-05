@@ -1,9 +1,12 @@
+#[cfg(windows)]
 use crate::modules::devtools;
 use crate::modules::dpapi;
 use crate::utils;
+#[cfg(windows)]
 use cef::Browser;
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(windows)]
 use windows::core::w;
 
 const FILE_VERSION: u32 = 1;
@@ -62,8 +65,14 @@ fn save(accounts: &[Stored]) {
     }
 }
 
+#[cfg(windows)]
 fn protect(text: &str) -> Option<String> {
     dpapi::protect(text, ENTROPY, w!("kute account"))
+}
+
+#[cfg(target_os = "linux")]
+fn protect(text: &str) -> Option<String> {
+    dpapi::protect(text, ENTROPY, "kute account")
 }
 
 fn unprotect(text: &str) -> Option<String> {
@@ -123,16 +132,22 @@ pub fn remove(username: &str) {
 }
 
 // fills and submits krunker's open login form over CDP, page scripts can't see that
+#[cfg(windows)]
 pub fn login(browser: &Browser, username: &str) {
-    let Some(stored) = load().into_iter().find(|stored| unprotect(&stored.username).as_deref() == Some(username)) else {
-        return;
-    };
-    let Some(password) = unprotect(&stored.password) else { return };
+    if let Some(expression) = login_script(username) {
+        devtools::evaluate(browser, &expression);
+    }
+}
+
+// fills krunker's open login form, run with devtools::evaluate. None when the account is unknown or does not decrypt
+pub fn login_script(username: &str) -> Option<String> {
+    let stored = load().into_iter().find(|stored| unprotect(&stored.username).as_deref() == Some(username))?;
+    let password = unprotect(&stored.password)?;
     // serde string = valid JS string literal
     let (Ok(name), Ok(pass)) = (serde_json::to_string(username), serde_json::to_string(&password)) else {
-        return;
+        return None;
     };
-    let expression = format!(
+    Some(format!(
         r##"(() => {{
             const name = document.querySelector("#accName");
             const pass = document.querySelector("#accPass");
@@ -144,6 +159,5 @@ pub fn login(browser: &Browser, username: &str) {
             document.querySelector(".io-button")?.click();
             return true;
         }})()"##
-    );
-    devtools::evaluate(browser, &expression);
+    ))
 }

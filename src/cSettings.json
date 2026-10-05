@@ -79,6 +79,7 @@
     "obsCapturePlugin": {
         "name": "OBS Capture Plugin",
         "id": "obsCapturePlugin",
+        "platforms": ["windows"],
         "description": "Adds a Kute Capture source to OBS (close OBS first). For sound, add an Application Audio Capture of 'Kute audio window'",
         "type": "checkbox",
         "category": "General",
@@ -87,6 +88,7 @@
     "rawInput": {
         "name": "Raw Input",
         "id": "rawInput",
+        "platforms": ["windows"],
         "description": "Mouse movement comes straight from the device, without Windows pointer acceleration, and all of it reaches the game, also when you click or scroll mid-flick. Krunker's own Raw Mouse Input follows this setting",
         "type": "checkbox",
         "category": "Game",
@@ -407,12 +409,24 @@
     "angleBackend": {
         "name": "Graphics Backend (ANGLE)",
         "id": "angleBackend",
+        "platforms": ["windows"],
         "description": "Leave it on Default (D3D11). OpenGL and Vulkan turn off everything the swapchain hook does",
         "type": "select",
         "category": "Advanced",
         "defaultValue": "Default",
         "needsRestart": true,
         "options": ["Default", "D3D11", "D3D11on12", "OpenGL", "Vulkan"]
+    },
+    "displayServer": {
+        "name": "Display Server",
+        "id": "displayServer",
+        "platforms": ["linux"],
+        "description": "Leave it on X11, it runs much faster than Wayland for now. X11 also works inside a Wayland session",
+        "type": "select",
+        "category": "Advanced",
+        "defaultValue": "X11",
+        "needsRestart": true,
+        "options": ["X11", "Wayland"]
     },
     "colorProfile": {
         "name": "Color Profile",
@@ -478,6 +492,7 @@
     "hardFlip": {
         "name": "DXGI Swapchain Hook",
         "id": "hardFlip",
+        "platforms": ["windows"],
         "description": "Present FPS counter and OBS capture. Laptops with two graphics chips may run better without it",
         "type": "checkbox",
         "category": "Engine",
@@ -487,7 +502,7 @@
     "laptopPowerBoost": {
         "name": "Laptop Power Boost",
         "id": "laptopPowerBoost",
-        "description": "Plugged in laptops only: sets Windows' power mode to Best performance while Kute runs and puts yours back after",
+        "description": "Plugged in laptops only: switches the power mode to performance while Kute runs and puts yours back after",
         "type": "checkbox",
         "category": "Engine",
         "defaultValue": true,
@@ -526,6 +541,7 @@
     "patchRawInputMovement": {
         "name": "Raw Input Keeps Movement",
         "id": "patchRawInputMovement",
+        "platforms": ["windows"],
         "description": "Chromium patch: no mouse movement is lost on a click. Off drops a few counts at every shot",
         "type": "checkbox",
         "category": "Engine",
@@ -556,6 +572,7 @@
     "patchHighQoS": {
         "name": "Game Process at High QoS",
         "id": "patchHighQoS",
+        "platforms": ["windows"],
         "description": "Chromium patch: Windows may not throttle the game's process to save power. Off leaves that to Windows",
         "type": "checkbox",
         "category": "Engine",
