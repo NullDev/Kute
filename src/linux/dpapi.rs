@@ -6,7 +6,14 @@ use aes_gcm::{
     aead::{Aead, AeadCore, OsRng, Payload},
 };
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, sync::Mutex, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 use zbus::{
     blocking::{Connection, Proxy},
     zvariant::{OwnedObjectPath, OwnedValue, Value},
@@ -19,6 +26,8 @@ const PROMPT_TIMEOUT: Duration = Duration::from_secs(120);
 
 // None after a failed lookup is not cached: the keyring may get unlocked later
 static KEY: Mutex<Option<[u8; 32]>> = Mutex::new(None);
+// a cancelled or unanswered prompt is the player's no until the next start, every page load asks for the list
+static DECLINED: AtomicBool = AtomicBool::new(false);
 
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -57,7 +66,11 @@ fn prompt(connection: &Connection, path: &OwnedObjectPath) -> bool {
             .map(|(dismissed, _)| dismissed);
         let _ = sender.send(dismissed);
     });
-    matches!(receiver.recv_timeout(PROMPT_TIMEOUT), Ok(Some(false)))
+    let answered = matches!(receiver.recv_timeout(PROMPT_TIMEOUT), Ok(Some(false)));
+    if !answered {
+        DECLINED.store(true, Ordering::Relaxed);
+    }
+    answered
 }
 
 fn attributes() -> HashMap<&'static str, &'static str> {
@@ -102,7 +115,7 @@ fn load_or_create() -> Option<[u8; 32]> {
 
 fn master_key() -> Option<[u8; 32]> {
     let mut cached = KEY.lock().unwrap();
-    if cached.is_none() {
+    if cached.is_none() && !DECLINED.load(Ordering::Relaxed) {
         *cached = load_or_create();
         if cached.is_none() {
             debug_print!("dpapi: no secret service key, nothing gets stored");

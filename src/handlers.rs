@@ -497,10 +497,52 @@ wrap_client! {
     }
 }
 
+#[cfg(windows)]
 fn handle_accounts_message(browser: &Browser, message: &str) {
+    if let Some(reply) = accounts_command(message, |script| modules::devtools::evaluate(browser, &script)) {
+        bridge::post_json(browser, &reply);
+    }
+}
+
+// the keyring may ask for its password and wait minutes for it, never on the ui thread
+#[cfg(target_os = "linux")]
+fn handle_accounts_message(browser: &Browser, message: &str) {
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+    let browser_id = browser.identifier();
+    let message = message.to_string();
+    std::thread::spawn(move || {
+        let _store = ONE_AT_A_TIME.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let reply = accounts_command(&message, |script| {
+            let mut task = EvaluateTask::new(browser_id, script);
+            post_task(ThreadId::UI, Some(&mut task));
+        });
+        if let Some(reply) = reply {
+            bridge::post_json_later(browser_id, reply);
+        }
+    });
+}
+
+#[cfg(target_os = "linux")]
+wrap_task! {
+    struct EvaluateTask {
+        browser_id: i32,
+        expression: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(browser) = window::browser_by_id(self.browser_id) {
+                modules::devtools::evaluate(&browser, &self.expression);
+            }
+        }
+    }
+}
+
+// the {accounts} reply, None for a command that gets none. a login hands its form script to run_login
+fn accounts_command(message: &str, run_login: impl FnOnce(String)) -> Option<String> {
     let (command, payload) = message.split_once(' ').unwrap_or((message, ""));
     if payload.len() > 64 * 1024 {
-        return;
+        return None;
     }
     match command {
         "list" => {}
@@ -517,19 +559,17 @@ fn handle_accounts_message(browser: &Browser, message: &str) {
             }
         }
         "remove" | "login" => {
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
-                return;
-            };
-            let Some(username) = value["username"].as_str() else { return };
+            let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+            let username = value["username"].as_str()?;
             if command == "remove" {
                 modules::accounts::remove(username);
-            } else {
-                modules::accounts::login(browser, username);
+            } else if let Some(script) = modules::accounts::login_script(username) {
+                run_login(script);
             }
         }
-        _ => return,
+        _ => return None,
     }
-    bridge::post_json(browser, &serde_json::json!({ "accounts": modules::accounts::list() }).to_string());
+    Some(serde_json::json!({ "accounts": modules::accounts::list() }).to_string())
 }
 
 // manager commands write files, a non krunker page could plant a userscript
@@ -845,12 +885,23 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         // dev badge proof, the token never leaves this process
         ["dev-proof", nonce, game, hash] => {
             let sane = nonce.len() <= 64 && game.len() <= 32 && hash.len() == 32;
-            let proof = if sane { modules::dev::proof(nonce, game, hash) } else { None };
-            let reply = match proof {
-                Some((user, proof)) => serde_json::json!({ "devProof": { "nonce": nonce, "user": user, "proof": proof } }),
-                None => serde_json::json!({ "devProof": { "nonce": nonce } }),
+            let (nonce, game, hash) = (nonce.to_string(), game.to_string(), hash.to_string());
+            let answer = move || {
+                let proof = if sane { modules::dev::proof(&nonce, &game, &hash) } else { None };
+                match proof {
+                    Some((user, proof)) => serde_json::json!({ "devProof": { "nonce": nonce, "user": user, "proof": proof } }),
+                    None => serde_json::json!({ "devProof": { "nonce": nonce } }),
+                }
+                .to_string()
             };
-            bridge::post_json(browser, &reply.to_string());
+            #[cfg(windows)]
+            bridge::post_json(browser, &answer());
+            // the token decrypts through the keyring, which may ask for its password first
+            #[cfg(target_os = "linux")]
+            {
+                let browser_id = browser.identifier();
+                std::thread::spawn(move || bridge::post_json_later(browser_id, answer()));
+            }
         }
         ["drag", value] => {
             // true = menu open, pointer free
