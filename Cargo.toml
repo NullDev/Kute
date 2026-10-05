@@ -83,6 +83,7 @@ render-dll = { path = "crates/render-dll", optional = true }
 aes-gcm = "0.10.*"
 libc = "0.2.*"
 sha2 = "0.10.*"
+x11rb = { version = "0.14.*", features = ["randr", "xfixes"] }
 zbus = "5.*"
 
 [build-dependencies]
