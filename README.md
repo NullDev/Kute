@@ -7,6 +7,7 @@
 ## :arrow_down: Download
 
 - [Download the latest installer](https://github.com/NullDev/Kute/releases/latest/download/kute-setup-x86_64.msi)
+- [Download for Linux (AppImage)](https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage) (`chmod +x kute-x86_64.AppImage`, then start it. Settings stay in `~/.config/kute`, it updates itself, see the Linux question in the FAQ below)
 - [Download the portable zip](https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64-portable.zip) (unpack anywhere and start `kute.exe`. Settings stay in `Documents\kute`, small updates still apply by themselves, a new client version opens the download page instead of installing)
 - [Release notes](https://github.com/NullDev/Kute/releases/latest)
 - [All Releases](https://github.com/NullDev/Kute/releases)
@@ -101,6 +102,18 @@ Run **Auto-Detect Best Settings** (General settings). It tests the client and pl
 <br>
 
 Kute uses pure raw input: your mouse's movement goes straight to the game, without Windows pointer acceleration, and none of it gets lost, not even the movement in the same instant as a click or a scroll. No other client passes every bit of it through. It is more accurate, and exactly because of that it can feel different for a few rounds if your aim is used to another client. Give it some time before you change your sensitivity.
+
+</details>
+
+<details>
+<summary><b>Does Kute run on Linux?</b></summary>
+<br>
+
+Yes, as an [AppImage](https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage) for 64-bit Linux with glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40 and later, Arch). Make it executable and start it, nothing gets installed. A few things work differently there:
+
+- It runs through X11 (XWayland in a Wayland session) by default, which runs much faster than native Wayland for now. Advanced settings, Display Server switches it.
+- Linux applies your desktop's mouse acceleration to the game, Chromium has no raw input there yet. For raw input set your mouse to the **Flat** acceleration profile at speed **0** (KDE: System Settings, Mouse; GNOME: Settings, Mouse, Mouse Acceleration off).
+- Not on Linux: the OBS capture plugin (OBS's PipeWire window capture records the game), the DXGI swapchain hook (the Present FPS Counter still works), the NVIDIA driver profile and the graphics backend choice.
 
 </details>
 
