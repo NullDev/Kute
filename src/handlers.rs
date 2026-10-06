@@ -2,6 +2,11 @@ use crate::{app, bridge, constants, debug_print, modules, utils, utils::config, 
 use cef::{rc::*, *};
 use std::sync::{LazyLock, Mutex, mpsc};
 
+#[cfg(windows)]
+type OsKeyEvent = sys::MSG;
+#[cfg(target_os = "linux")]
+type OsKeyEvent = sys::XEvent;
+
 // args from a second instance while the main window gets recreated
 static PENDING_ARGS: Mutex<Option<String>> = Mutex::new(None);
 
@@ -174,6 +179,15 @@ wrap_request_context_handler! {
     pub struct KuteRequestContextHandler;
 
     impl RequestContextHandler {
+        // chrome style never stores a grant from the permission handler, without this enumerateDevices hides
+        // every mic name and krunker's voice chat shows "Unknown device"
+        fn on_request_context_initialized(&self, request_context: Option<&mut RequestContext>) {
+            if let Some(context) = request_context {
+                let url = CefString::from("https://krunker.io/");
+                context.set_content_setting(Some(&url), Some(&url), ContentSettingTypes::MEDIASTREAM_MIC, ContentSettingValues::ALLOW);
+            }
+        }
+
         fn resource_request_handler(
             &self,
             _browser: Option<&mut Browser>,
@@ -198,7 +212,7 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: Option<&mut sys::MSG>,
+            _os_event: Option<&mut OsKeyEvent>,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
@@ -483,10 +497,52 @@ wrap_client! {
     }
 }
 
+#[cfg(windows)]
 fn handle_accounts_message(browser: &Browser, message: &str) {
+    if let Some(reply) = accounts_command(message, |script| modules::devtools::evaluate(browser, &script)) {
+        bridge::post_json(browser, &reply);
+    }
+}
+
+// the keyring may ask for its password and wait minutes for it, never on the ui thread
+#[cfg(target_os = "linux")]
+fn handle_accounts_message(browser: &Browser, message: &str) {
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+    let browser_id = browser.identifier();
+    let message = message.to_string();
+    std::thread::spawn(move || {
+        let _store = ONE_AT_A_TIME.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let reply = accounts_command(&message, |script| {
+            let mut task = EvaluateTask::new(browser_id, script);
+            post_task(ThreadId::UI, Some(&mut task));
+        });
+        if let Some(reply) = reply {
+            bridge::post_json_later(browser_id, reply);
+        }
+    });
+}
+
+#[cfg(target_os = "linux")]
+wrap_task! {
+    struct EvaluateTask {
+        browser_id: i32,
+        expression: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(browser) = window::browser_by_id(self.browser_id) {
+                modules::devtools::evaluate(&browser, &self.expression);
+            }
+        }
+    }
+}
+
+// the {accounts} reply, None for a command that gets none. a login hands its form script to run_login
+fn accounts_command(message: &str, run_login: impl FnOnce(String)) -> Option<String> {
     let (command, payload) = message.split_once(' ').unwrap_or((message, ""));
     if payload.len() > 64 * 1024 {
-        return;
+        return None;
     }
     match command {
         "list" => {}
@@ -503,19 +559,17 @@ fn handle_accounts_message(browser: &Browser, message: &str) {
             }
         }
         "remove" | "login" => {
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
-                return;
-            };
-            let Some(username) = value["username"].as_str() else { return };
+            let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+            let username = value["username"].as_str()?;
             if command == "remove" {
                 modules::accounts::remove(username);
-            } else {
-                modules::accounts::login(browser, username);
+            } else if let Some(script) = modules::accounts::login_script(username) {
+                run_login(script);
             }
         }
-        _ => return,
+        _ => return None,
     }
-    bridge::post_json(browser, &serde_json::json!({ "accounts": modules::accounts::list() }).to_string());
+    Some(serde_json::json!({ "accounts": modules::accounts::list() }).to_string())
 }
 
 // manager commands write files, a non krunker page could plant a userscript
@@ -664,7 +718,10 @@ pub fn open_documents_subpath(target: &str) {
         }
         _ => return,
     };
+    #[cfg(windows)]
     std::process::Command::new("explorer.exe").arg(path_to_open).spawn().ok();
+    #[cfg(target_os = "linux")]
+    crate::linux::sys::open(path_to_open);
 }
 
 pub fn open_in_default_browser(url: &str) {
@@ -674,10 +731,15 @@ pub fn open_in_default_browser(url: &str) {
     if !allowed || url.chars().any(|c| c.is_whitespace() || c == '"') {
         return;
     }
-    use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
-    let url = windows::core::HSTRING::from(url);
-    unsafe {
-        ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL);
+    #[cfg(target_os = "linux")]
+    crate::linux::sys::open(url);
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+        let url = windows::core::HSTRING::from(url);
+        unsafe {
+            ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL);
+        }
     }
 }
 
@@ -823,12 +885,23 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         // dev badge proof, the token never leaves this process
         ["dev-proof", nonce, game, hash] => {
             let sane = nonce.len() <= 64 && game.len() <= 32 && hash.len() == 32;
-            let proof = if sane { modules::dev::proof(nonce, game, hash) } else { None };
-            let reply = match proof {
-                Some((user, proof)) => serde_json::json!({ "devProof": { "nonce": nonce, "user": user, "proof": proof } }),
-                None => serde_json::json!({ "devProof": { "nonce": nonce } }),
+            let (nonce, game, hash) = (nonce.to_string(), game.to_string(), hash.to_string());
+            let answer = move || {
+                let proof = if sane { modules::dev::proof(&nonce, &game, &hash) } else { None };
+                match proof {
+                    Some((user, proof)) => serde_json::json!({ "devProof": { "nonce": nonce, "user": user, "proof": proof } }),
+                    None => serde_json::json!({ "devProof": { "nonce": nonce } }),
+                }
+                .to_string()
             };
-            bridge::post_json(browser, &reply.to_string());
+            #[cfg(windows)]
+            bridge::post_json(browser, &answer());
+            // the token decrypts through the keyring, which may ask for its password first
+            #[cfg(target_os = "linux")]
+            {
+                let browser_id = browser.identifier();
+                std::thread::spawn(move || bridge::post_json_later(browser_id, answer()));
+            }
         }
         ["drag", value] => {
             // true = menu open, pointer free
@@ -862,7 +935,11 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         }
         ["get-present-intervals"] => {
             // blocks up to 150 ms, off the UI thread
+            #[cfg(windows)]
             let hook = config("hardFlip", true);
+            // patch 10, always on
+            #[cfg(target_os = "linux")]
+            let hook = true;
             let browser_id = browser.identifier();
             std::thread::spawn(move || {
                 let intervals = if hook { app::take_present_intervals() } else { None };
@@ -894,6 +971,23 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         }
         ["restart"] => {
             modules::lifecycle::restart();
+        }
+        // the AppImage updater, linuxUpdate.js
+        #[cfg(target_os = "linux")]
+        ["update-state"] => {
+            modules::updater::send_state(browser);
+        }
+        #[cfg(target_os = "linux")]
+        ["update-install"] => {
+            modules::updater::install();
+        }
+        #[cfg(target_os = "linux")]
+        ["update-restart"] => {
+            modules::updater::restart();
+        }
+        #[cfg(target_os = "linux")]
+        ["update-page"] => {
+            open_in_default_browser(constants::RELEASE_PAGE_URL);
         }
         ["bring-to-front"] => {
             window::bring_to_front(browser);
@@ -928,6 +1022,11 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
                     eprintln!("Failed to set rpc activity: {}", e);
                 }
             }
+        }
+        // linux: the page swallowed a wheel tick while locked (rampBoost.js), windows never sends this
+        #[cfg(target_os = "linux")]
+        ["ramp-wheel", direction] => {
+            modules::input::ramp_wheel(browser, direction.parse::<i32>().unwrap_or(0) > 0);
         }
         ["toggle-rboost", value] => {
             let value = value.parse::<bool>().unwrap_or(false);

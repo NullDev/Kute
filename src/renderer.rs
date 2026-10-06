@@ -13,10 +13,14 @@ fn frame_key(frame: &Frame) -> String {
 
 fn bundle_source() -> String {
     // bundle from the updater wins over the embedded one
-    #[cfg(feature = "auto-update")]
+    #[cfg(all(feature = "auto-update", windows))]
     if let Ok(bundle) = std::fs::read_to_string(utils::exe_dir().join("resources").join("bundle.js"))
         && !bundle.is_empty()
     {
+        return bundle;
+    }
+    #[cfg(all(feature = "auto-update", target_os = "linux"))]
+    if let Some(bundle) = modules::updater::downloaded_bundle() {
         return bundle;
     }
 
