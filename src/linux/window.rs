@@ -355,7 +355,9 @@ pub fn device_scale(browser: &Browser) -> f64 {
         .unwrap_or(1.0)
 }
 
-// a hidden page stops rendering
+// a hidden page stops rendering. hiding the view drops the page's focus for good: request_focus, set_focus and an
+// activate (with x11 focus on our window the whole time) left document.hasFocus() false, and chromium refused auto-detect's
+// spawn click the pointer lock (WrongDocumentError). devtools' Page.bringToFront is what gives it back
 pub fn set_browser_visible(browser: &Browser, visible: bool) {
     let Some(host) = browser.host() else { return };
     let mut browser = browser.clone();
@@ -365,6 +367,7 @@ pub fn set_browser_visible(browser: &Browser, visible: bool) {
     host.was_hidden((!visible) as i32);
     if visible {
         host.set_focus(1);
+        modules::devtools::bring_to_front(&browser);
     }
 }
 

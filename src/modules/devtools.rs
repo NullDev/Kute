@@ -46,6 +46,12 @@ pub fn click(browser: &Browser, x: i32, y: i32) {
     }
 }
 
+// focuses the page's web contents, linux window.rs needs it after showing the page again
+#[cfg(target_os = "linux")]
+pub fn bring_to_front(browser: &Browser) {
+    call(browser, "Page.bringToFront", None);
+}
+
 // one step of the linux input replay. under pointer lock the page sees the position differences as movementX/Y
 #[cfg(target_os = "linux")]
 pub fn mouse_event(browser: &Browser, kind: &str, x: i32, y: i32, held: bool) {

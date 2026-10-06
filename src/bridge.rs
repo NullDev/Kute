@@ -73,7 +73,8 @@ fn host_features() -> serde_json::Value {
         "ramp-boost",
         "hybrid-gpu",
         "x3d-cores",
-        "load-sample"
+        "load-sample",
+        "autodetect-v2"
     ])
 }
 
