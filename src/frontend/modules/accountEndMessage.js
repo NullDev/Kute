@@ -2,7 +2,8 @@ import { kute } from "../client.js";
 
 const SETTING_KEY = "kro_setngss_endMessage";
 const FIELD_ID = "slid_endMessage";
-const CHECK_MS = 2000;
+// holds krunker's signed in or signed out bar, a login or logout swaps them
+const HEADER_ID = "playerHeaderEl";
 const SAVE_DELAY_MS = 500;
 
 /**
@@ -40,7 +41,7 @@ class AccountEndMessage {
     constructor(){
         /** @type {string|null|undefined} account whose message is in the game setting, undefined before the first check */
         this.account = undefined;
-        this.timer = 0;
+        this.header = new MutationObserver(() => this.check());
         this.saveTimer = 0;
         /** @type {string|null} */
         this.editedFor = null;
@@ -106,7 +107,7 @@ class AccountEndMessage {
      * @param {boolean} byPlayer
      */
     toggle(enabled, byPlayer){
-        clearInterval(this.timer);
+        this.header.disconnect();
         document.removeEventListener("input", this.onInput, true);
         if (!enabled){
             this.flush();
@@ -127,8 +128,11 @@ class AccountEndMessage {
         }
 
         document.addEventListener("input", this.onInput, true);
+        const header = document.getElementById(HEADER_ID);
+        if (header) this.header.observe(header, { childList: true });
+        // without the header nobody gets confirmed and the message stays empty
+        else console.error("[kute] end message: no account header");
         this.check();
-        this.timer = setInterval(() => this.check(), CHECK_MS);
     }
 }
 
