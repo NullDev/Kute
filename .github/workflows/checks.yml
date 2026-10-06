@@ -72,7 +72,8 @@ jobs:
 
   rust-linux:
     name: Clippy (Linux)
-    runs-on: ubuntu-24.04
+    # same image as the release's AppImage job
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout

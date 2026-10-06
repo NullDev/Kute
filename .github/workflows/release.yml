@@ -191,7 +191,8 @@ jobs:
   appimage:
     name: Build AppImage
     needs: release
-    runs-on: ubuntu-24.04
+    # the image's glibc is the oldest the AppImage runs on, 24.04 meant 2.39 and shut out ubuntu 22.04 and debian 12
+    runs-on: ubuntu-22.04
 
     steps:
       # the version the windows job bumped and tagged, so both builds carry the same number

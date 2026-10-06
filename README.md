@@ -109,7 +109,7 @@ Kute uses pure raw input: your mouse's movement goes straight to the game, witho
 <summary><b>Does Kute run on Linux?</b></summary>
 <br>
 
-Yes, as an [AppImage](https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage) for 64-bit Linux with glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40 and later, Arch). Make it executable and start it, nothing gets installed. A few things work differently there:
+Yes, as an [AppImage](https://github.com/NullDev/Kute/releases/latest/download/kute-x86_64.AppImage) for 64-bit Linux with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later, Arch). Make it executable and start it, nothing gets installed. A few things work differently there:
 
 - It runs through X11 (XWayland in a Wayland session) by default, which runs much faster than native Wayland for now. Advanced settings, Display Server switches it.
 - Linux applies your desktop's mouse acceleration to the game, Chromium has no raw input there yet. For raw input set your mouse to the **Flat** acceleration profile at speed **0** (KDE: System Settings, Mouse; GNOME: Settings, Mouse, Mouse Acceleration off).
