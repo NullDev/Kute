@@ -57,7 +57,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Queue ranked without the game open
 - [x] Better ranked with ELO system
 - [x] Find out your real ping to the servers
-- [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left)
+- [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left), with starred modes and maps tried first in your order
 - [x] Better chat
 - [x] Hardpoint enemy counter
 - [x] Nuke counter: your career nuke total in game, with an optional goal
