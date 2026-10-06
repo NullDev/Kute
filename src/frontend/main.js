@@ -17,6 +17,13 @@ if (isBenchPage) import("./modules/autoDetect/bench.js");
 if (!isBenchPage && localStorage.getItem("krk_advanced") === null) localStorage.setItem("krk_advanced", "1");
 if (!isBenchPage) postIconUrls();
 
+// krunker reads its settings once at start, before the account is known. accountEndMessage.js sets the right one
+if (location.hostname === "krunker.io" && location.pathname === "/"){
+    ready.then(() => {
+        if (kute.settings?.data?.accountEndMessage) localStorage.setItem("kro_setngss_endMessage", "");
+    });
+}
+
 let initialLoad = true;
 window.OffCliV = true;
 window.closeClient = () => window.chrome.webview.postMessage("close");
@@ -182,6 +189,8 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/settingsTransfer.js");
         // always: customize button needs the module
         import("./modules/nukeCounter.js");
+        // always: turning it on keeps the current message, only its toggle knows that
+        import("./modules/accountEndMessage.js");
         // always: customize button needs it, host needs icon url changes
         import("./modules/kuteIcons/index.js");
         // always: the hud editor toggles it, and measures the timer on the menu right after, so this comes first
