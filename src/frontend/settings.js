@@ -18,7 +18,7 @@ import { setRampBoost } from "./modules/rampBoost.js";
  * @property {boolean} [needsRefresh]
  * @property {string} [button]
  * @property {string} [buttonAction] Inline JS; "{{kute}}" is replaced with a reference to the client object
- * @property {boolean} [requiresLogin] The button is disabled while no account is logged in
+ * @property {boolean} [requiresLogin] The button and the checkbox are disabled while no account is logged in
  * @property {string} [requires] id of a checkbox setting this one depends on, disabled while that is off
  * @property {string} [disabledBy] id of a checkbox setting that forces this one off while on, the stored value stays
  * @property {string} [hostFeature] hostFeatures entry the exe must list, the setting is not shown without it
@@ -390,6 +390,13 @@ class SettingsManager {
                     return `<label class='switch' style="${BLOCKED_STYLE}" title="Off while ${blocker.name} is on">
                         <input id="${option.id}" type='checkbox' disabled
                             onclick='${globalRef}.settings.changeSetting("${option.id}", this.checked, false)'>
+                        <span class='slider'></span>
+                    </label>
+                    ${button}`;
+                }
+                if (locked){
+                    return `<label class='switch' style="${BLOCKED_STYLE}" title="Log in first">
+                        <input id="${option.id}" type='checkbox' disabled ${value ? "checked" : ""}>
                         <span class='slider'></span>
                     </label>
                     ${button}`;

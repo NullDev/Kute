@@ -158,6 +158,15 @@
         "button": "Filters",
         "buttonAction": "{{kute}}.matchmaker.showFilters()"
     },
+    "accountEndMessage": {
+        "name": "Match End Message per Account",
+        "id": "accountEndMessage",
+        "description": "Remembers Krunker's Match End Message per account, an account without one sends nothing",
+        "type": "checkbox",
+        "category": "Game",
+        "defaultValue": false,
+        "requiresLogin": true
+    },
     "exitButton": {
         "name": "Exit Button",
         "id": "exitButton",
