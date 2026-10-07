@@ -127,6 +127,7 @@ pub fn collect(window: u64) -> Value {
         "hybrid": hybrid,
         // the render gpu is read from the gpu process' open device files, never guessed
         "hybridSource": if hybrid.is_some() { "observed" } else { "unknown" },
+        "primeOffload": gpu::prime_offload(),
         "powerOverlay": power::overlay_name(),
         "cpu": {
             "name": sys::proc_field("/proc/cpuinfo", "model name"),

@@ -1,4 +1,5 @@
 use super::{nvidia, sys};
+use crate::debug_print;
 use std::{
     collections::HashMap,
     fs,
@@ -176,13 +177,78 @@ pub fn render_adapter() -> Option<String> {
     }
 }
 
-// prime offload (DRI_PRIME, __NV_PRIME_RENDER_OFFLOAD) would go here. not done: no hybrid laptop to verify it on, and a
-// wrong offload variable can leave the game black
-pub fn apply_hybrid_defaults() {}
+// first line of /proc/driver/nvidia/version, "NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14  ..."
+fn driver_major(text: &str) -> Option<u32> {
+    text.lines().next()?.split_whitespace().find_map(|word| {
+        let (major, rest) = word.split_once('.')?;
+        rest.starts_with(|c: char| c.is_ascii_digit()).then(|| major.parse().ok()).flatten()
+    })
+}
+
+// render offload needs driver 435 or newer, an older one leaves the game black under these variables
+const PRIME_MIN_DRIVER: u32 = 435;
+const PRIME_VARS: [(&str, &str); 3] = [
+    ("__NV_PRIME_RENDER_OFFLOAD", "1"),
+    ("__GLX_VENDOR_LIBRARY_NAME", "nvidia"),
+    ("__VK_LAYER_NV_optimus", "NVIDIA_only"),
+];
+
+static PRIME_OFFLOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn prime_offload() -> bool {
+    PRIME_OFFLOAD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+// before cef starts, every subprocess inherits the environment. only a real hybrid: the display hangs on another chip
+// than the nvidia one. a player who already picked (prime-run, DRI_PRIME) keeps that
+pub fn apply_hybrid_defaults() {
+    if !crate::utils::config("primeOffload", true) {
+        return;
+    }
+    if ["__NV_PRIME_RENDER_OFFLOAD", "__GLX_VENDOR_LIBRARY_NAME", "__VK_LAYER_NV_optimus", "DRI_PRIME"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+    {
+        debug_print!("gpu: offload variables already set, prime offload left alone");
+        return;
+    }
+    let Some(major) = fs::read_to_string("/proc/driver/nvidia/version").ok().as_deref().and_then(driver_major) else {
+        return;
+    };
+    let nvidia = cards().iter().any(|card| card.driver == "nvidia");
+    let display_elsewhere = cards().iter().any(|card| card.driver != "nvidia" && !connected_outputs(card).is_empty());
+    if !nvidia || !display_elsewhere {
+        return;
+    }
+    if major < PRIME_MIN_DRIVER {
+        debug_print!("gpu: hybrid graphics, nvidia driver {major} is too old for prime offload");
+        return;
+    }
+    for (name, value) in PRIME_VARS {
+        // cef has not started, the only other threads are ours and std locks its own env access
+        unsafe { std::env::set_var(name, value) };
+    }
+    PRIME_OFFLOAD.store(true, std::sync::atomic::Ordering::Relaxed);
+    debug_print!("gpu: hybrid graphics, prime offload to the nvidia gpu (driver {major})");
+}
 
 #[cfg(test)]
 mod tests {
-    use super::short_name;
+    #[test]
+    fn driver_major_reads_both_kernel_modules() {
+        assert_eq!(
+            driver_major("NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14  Thu Feb 22 01:44:30 UTC 2024\nGCC version:"),
+            Some(550)
+        );
+        assert_eq!(
+            driver_major("NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  560.35.03  Release Build"),
+            Some(560)
+        );
+        assert_eq!(driver_major("NVRM version: NVIDIA UNIX x86_64 Kernel Module  390.157  Wed Oct 12"), Some(390));
+        assert_eq!(driver_major(""), None);
+    }
+
+    use super::{driver_major, short_name};
 
     #[test]
     fn pci_ids_names() {

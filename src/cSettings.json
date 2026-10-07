@@ -538,6 +538,17 @@
         "defaultValue": true,
         "hostFeature": "hybrid-gpu"
     },
+    "primeOffload": {
+        "name": "NVIDIA PRIME Offload",
+        "id": "primeOffload",
+        "platforms": ["linux"],
+        "description": "Hybrid laptops with the NVIDIA driver: the game renders on the NVIDIA chip instead of the built in one",
+        "type": "checkbox",
+        "category": "Engine",
+        "defaultValue": true,
+        "needsRestart": true,
+        "hostFeature": "prime-offload"
+    },
     "patchInputPriority": {
         "name": "Input at Normal Priority",
         "id": "patchInputPriority",
