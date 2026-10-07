@@ -211,9 +211,17 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # cef-dll-sys builds its wrapper with CMake and Ninja
+      # cef-dll-sys builds its wrapper with CMake and Ninja. apt hung twice for 15+ min on a release run, so only when missing
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+        timeout-minutes: 5
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          if ! command -v ninja >/dev/null || ! command -v cmake >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y ninja-build cmake
+          fi
+          cmake --version
+          ninja --version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
