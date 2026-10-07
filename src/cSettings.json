@@ -22,7 +22,7 @@
     "hotkeys": {
         "name": "Hotkeys",
         "id": "hotkeys",
-        "description": "Change or clear Kute's own keys (new lobby, matchmaker, reload, fullscreen) and add keys for toggles",
+        "description": "Change or clear Kute's own keys (new lobby, matchmaker, reload, fullscreen, chat logs) and add keys for toggles",
         "type": "none",
         "category": "General",
         "button": "Change",
@@ -158,6 +158,14 @@
         "button": "Filters",
         "buttonAction": "{{kute}}.matchmaker.showFilters()"
     },
+    "rankedAlert": {
+        "name": "Ranked Match Alert",
+        "id": "rankedAlert",
+        "description": "When Krunker's ranked queue finds a match while you are tabbed out, Kute comes to the front",
+        "type": "checkbox",
+        "category": "Game",
+        "defaultValue": true
+    },
     "accountEndMessage": {
         "name": "Match End Message per Account",
         "id": "accountEndMessage",
@@ -202,6 +210,16 @@
         "type": "checkbox",
         "category": "Interface",
         "defaultValue": true
+    },
+    "chatLogs": {
+        "name": "Chat Logs",
+        "id": "chatLogs",
+        "description": "Keeps the last 2000 chat lines, also across lobbies, to search and copy. F1 opens them, change it in Hotkeys",
+        "type": "checkbox",
+        "category": "Interface",
+        "defaultValue": true,
+        "button": "Open",
+        "buttonAction": "{{kute}}.chatLogs?.open()"
     },
     "textSelect": {
         "name": "Selectable Chat",
@@ -396,6 +414,17 @@
         "defaultValue": true,
         "needsRefresh": true
     },
+    "disableVideoSkins": {
+        "name": "Disable Video Skins",
+        "id": "disableVideoSkins",
+        "performance": true,
+        "description": "Video skins like Glitch are not loaded and show black instead, which can save FPS",
+        "type": "checkbox",
+        "category": "Customization",
+        "defaultValue": false,
+        "needsRefresh": true,
+        "hostFeature": "video-skins"
+    },
     "uncapFps": {
         "name": "Uncap FPS",
         "id": "uncapFps",
@@ -516,6 +545,17 @@
         "category": "Engine",
         "defaultValue": true,
         "hostFeature": "hybrid-gpu"
+    },
+    "primeOffload": {
+        "name": "NVIDIA PRIME Offload",
+        "id": "primeOffload",
+        "platforms": ["linux"],
+        "description": "Hybrid laptops with the NVIDIA driver: the game renders on the NVIDIA chip instead of the built in one",
+        "type": "checkbox",
+        "category": "Engine",
+        "defaultValue": true,
+        "needsRestart": true,
+        "hostFeature": "prime-offload"
     },
     "patchInputPriority": {
         "name": "Input at Normal Priority",

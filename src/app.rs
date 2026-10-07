@@ -259,6 +259,9 @@ pub fn load_flags() {
     // present stats from viz (patch 10), what render.dll's hook measures on windows
     #[cfg(target_os = "linux")]
     flags.push("--enable-features=KutePresentStats".to_string());
+    // the esc bubble on f11 and pointer lock is an overlay that blocks direct scanout and tearing (patch 11)
+    #[cfg(target_os = "linux")]
+    flags.push("--enable-features=KuteNoExclusiveAccessBubble".to_string());
     // a bench decides its patches itself (bench::flags), the settings decide for the client
     if modules::bench::config().is_none() {
         for patch in PATCHES {
@@ -540,6 +543,12 @@ wrap_app! {
             #[cfg(target_os = "linux")]
             if cmd.has_switch(Some(&CefString::from("ozone-platform"))) == 0 && use_x11() {
                 cmd.append_switch_with_value(Some(&CefString::from("ozone-platform")), Some(&CefString::from("x11")));
+            }
+            // on native wayland the pacing patch waits for the compositor's frame feedback, which holds the game at the refresh
+            // rate and keeps hyprland/kwin from tearing. the disable list wins, so this also covers a bench and user_flags.json
+            #[cfg(target_os = "linux")]
+            if utils::cef_to_string(&cmd.switch_value(Some(&CefString::from("ozone-platform")))) != "x11" {
+                merge_list_switch(cmd, "disable-features", "KuteFramePacing");
             }
         }
     }

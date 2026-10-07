@@ -199,7 +199,15 @@ pub fn bring_to_front(browser: &Browser) {
         if IsIconic(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_RESTORE);
         }
-        let _ = SetForegroundWindow(hwnd);
+        // windows' foreground lock refuses a background app, the taskbar flashes until the player comes back
+        if !SetForegroundWindow(hwnd).as_bool() || GetForegroundWindow() != hwnd {
+            let _ = FlashWindowEx(&FLASHWINFO {
+                cbSize: size_of::<FLASHWINFO>() as u32,
+                hwnd,
+                dwFlags: FLASHW_ALL | FLASHW_TIMERNOFG,
+                ..Default::default()
+            });
+        }
     }
     if let Some(host) = browser.host() {
         host.set_focus(1);

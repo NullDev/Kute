@@ -49,7 +49,8 @@ fn host_features() -> serde_json::Value {
         "hybrid-gpu",
         "autodetect-v2",
         "load-sample",
-        "hotkeys"
+        "hotkeys",
+        "video-skins"
     ])
 }
 
@@ -74,7 +75,9 @@ fn host_features() -> serde_json::Value {
         "hybrid-gpu",
         "x3d-cores",
         "load-sample",
-        "autodetect-v2"
+        "autodetect-v2",
+        "video-skins",
+        "prime-offload"
     ])
 }
 
