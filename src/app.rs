@@ -259,6 +259,9 @@ pub fn load_flags() {
     // present stats from viz (patch 10), what render.dll's hook measures on windows
     #[cfg(target_os = "linux")]
     flags.push("--enable-features=KutePresentStats".to_string());
+    // the esc bubble on f11 and pointer lock is an overlay that blocks direct scanout and tearing (patch 11)
+    #[cfg(target_os = "linux")]
+    flags.push("--enable-features=KuteNoExclusiveAccessBubble".to_string());
     // a bench decides its patches itself (bench::flags), the settings decide for the client
     if modules::bench::config().is_none() {
         for patch in PATCHES {
