@@ -331,7 +331,7 @@
             <div><span></span><b>Patched Chromium</b><p>No aim freeze with uncapped FPS, no stutter when the GPU is the limit, and more. Every patch is a switch in the Engine settings.</p></div>
             <div><span></span><b>Uncapped FPS</b><p>Removes the refresh rate cap.</p></div>
             <div><span></span><b>Fix Audio Stutters</b><p>Optional: keeps the game's 3D sound from eating the audio thread at high FPS.</p></div>
-            <div><span></span><b>Laptop setup</b><p>Two graphics chips are recognized: Kute picks the fast one and skips the swap chain hook there. Plugged in, it runs on Best performance and puts your power mode back after.</p></div>
+            <div><span></span><b>Laptop setup</b><p>Two graphics chips are recognized: Kute picks the fast one and skips the swap chain hook there. Plugged in, it runs on Best performance and puts your power mode back after. On Linux, NVIDIA PRIME offload renders on the NVIDIA chip.</p></div>
             <div><span></span><b>NVIDIA profile</b><p>A driver profile for Kute alone lifts a global Max Frame Rate or forced V-Sync. Yours to change.</p></div>
             <div><span></span><b>Exact FPS limit</b><p>Held inside Chromium's compositor by our own patch, so the CPU idles between frames. Works with or without the swap chain hook.</p></div>
             <div><span></span><b>Present FPS counter</b><p>A second counter for the frames that reach your screen.</p></div>
@@ -349,6 +349,8 @@
             <div><span></span><b>Ramp boosting</b><p>Scrolling jumps. Off in competitive.</p></div>
             <div><span></span><b>Real Ping</b><p>Pings the lobby server and shows your actual latency.</p></div>
             <div><span></span><b>Player list ping</b><p>Everyone's ping as a number.</p></div>
+            <div><span></span><b>Find Game pings</b><p>Every server in Find Game shows your real ping to its region. The old browser layout lists regions fastest first.</p></div>
+            <div><span></span><b>Ranked match alert</b><p>Tabbed out while you queue ranked? When a match is found, Kute comes to the front or flashes in your taskbar.</p></div>
             <div><span></span><b>Hardpoint enemy counter</b><p>How many enemies are on the point in competitive.</p></div>
             <div><span></span><b>Headshot sound</b><p>The headshot sound on every kill.</p></div>
             <div><span></span><b>Auto spectate</b><p>Joins public matches as a spectator.</p></div>
@@ -365,6 +367,7 @@
           <div class="feature-group" id="f-interface">
             <h3>Interface</h3>
             <div><span></span><b>Better chat</b><p>Team and all chat in one view, Tab switches where you send. Chat text can be selected.</p></div>
+            <div><span></span><b>Chat logs</b><p>The last 2000 chat lines, kept when you switch lobbies. F1 opens them to filter by players, kills, events and server, search and copy. The key is yours to change.</p></div>
             <div><span></span><b>Menu timer</b><p>The match timer in the menu.</p></div>
             <div><span></span><b>Classic menu</b><p>The Season 9 menu layout, new buttons included.</p></div>
             <div><span></span><b>Cleaner menu</b><p>Hides the store ad, live streams, featured maps, the Popular Now row and other promos. The logo and every button stay.</p></div>
@@ -387,6 +390,7 @@
             <div><span></span><b>Disable video skins</b><p>Animated video skins like Glitch are not loaded at all, for players whose FPS drops when they show up. Every other video in the game stays.</p></div>
             <div><span></span><b>Userscripts</b><p>Crankshaft and idkr scripts work as they are. Manage them in the client: turn them on and off live, change their settings, edit them in the built-in editor or drop new ones in. Example scripts come along, off by default: Class Roulette draws a random class on every respawn, Quick Sell by Rarity clears one rarity from your inventory after a preview and a confirmation.</p></div>
             <div><span></span><b>Mods</b><p>Krunker mods load right in the game window. Mod, lobby and invite links never open a second game that would end your match.</p></div>
+            <div><span></span><b>Mod download</b><p>A download button on every mod in Krunker's Mods window. One click saves the mod's zip to your Downloads folder.</p></div>
             <div><span></span><b>Krunker settings import</b><p>Pick which parts to import: keybinds, sensitivity, sound.</p></div>
           </div>
 
@@ -422,6 +426,7 @@
             <li><a href="https://github.com/idkr-client/idkr" target="_blank" rel="noreferrer">idkr-client/idkr</a><span>tweaks</span></li>
             <li><a href="https://github.com/bigjakk/Electron-Websocket-Fix" target="_blank" rel="noreferrer">bigjakk/Electron-Websocket-Fix</a><span>aim freeze fix</span></li>
             <li><a href="https://github.com/Alx8g/wok-client" target="_blank" rel="noreferrer">Alx8g/wok-client</a><span>motion blur idea</span></li>
+            <li class="wide"><div><a href="https://github.com/PC7-Client/PC7-Client" target="_blank" rel="noreferrer">PC7 Client</a> and <a href="https://github.com/ghostypostie/Water" target="_blank" rel="noreferrer">Water Client</a></div><span>ideas</span></li>
             <li class="wide"><a href="https://github.com/bigjakk/Krunker-Civilian-Client" target="_blank" rel="noreferrer">bigjakk/Krunker-Civilian-Client</a><span>matchmaker, nuke counter, custom sky and keystrokes ideas</span></li>
           </ul>
 

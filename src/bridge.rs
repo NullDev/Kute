@@ -76,7 +76,8 @@ fn host_features() -> serde_json::Value {
         "x3d-cores",
         "load-sample",
         "autodetect-v2",
-        "video-skins"
+        "video-skins",
+        "prime-offload"
     ])
 }
 

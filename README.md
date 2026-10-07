@@ -35,7 +35,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Increased performance tweaks (chromium & CEF flags, game settings, system optimizations)
 - [x] Auto-Detect Best Settings: Client benchmarks your PC and automatically selects the optimal settings for performance and stability. Can be reverted at any time
 - [x] Disable all non-performance features: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
-- [x] Laptops with two graphics chips are recognized: Kute picks the fast one in Windows' graphics settings once, and starts without the swapchain hook there
+- [x] Laptops with two graphics chips are recognized: Kute picks the fast one in Windows' graphics settings once, and starts without the swapchain hook there. On Linux, NVIDIA PRIME render offload puts the game on the NVIDIA chip
 - [x] Laptop Power Boost (optional): a plugged in laptop runs on Windows' Best performance mode while Kute is open, and gets its own mode back after
 - [x] NVIDIA driver caps lifted for Kute only: its own driver profile
 - [x] Selectable graphics backend (ANGLE: D3D11, D3D11on12, OpenGL, Vulkan) and color profile
@@ -52,6 +52,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Battle pass claim-all
 - [x] Userscripts (Crankshaft and idkr formats) with an in-client manager: live on/off, script settings, a built-in editor, drag and drop. Ships with example scripts, off by default: Class Roulette draws a random class on every respawn (Sharp Shooter in any mode), with a toggle per class and a "don't repeat the last N" option; Quick Sell by Rarity sells every quick sellable item of one rarity at once, with a preview of items and KR and a confirmation before anything is sold
 - [x] Mod compatibility: mods, lobby and invite links open in the game window instead of a second one that would end your match
+- [x] One-click mod download: a download button on every mod in Krunker's Mods window saves its zip to your Downloads folder
 - [x] OBS capture plugin (shared texture game capture plus a dedicated audio window)
 - [x] Officially supported by Medal.tv
 - [x] Encrypted Account Manager
@@ -59,8 +60,11 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Queue ranked without the game open
 - [x] Better ranked with ELO system
 - [x] Find out your real ping to the servers
+- [x] Real pings in Find Game: every server shows its region's ping, and the old browser layout sorts regions fastest first
+- [x] Ranked match alert (optional): when Krunker's ranked queue finds a match while you are tabbed out, Kute comes to the front or flashes in the taskbar
 - [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left), with starred modes and maps tried first in your order
 - [x] Better chat
+- [x] Chat logs: the last 2000 chat lines, kept across lobbies, to filter, search and copy (F1, rebindable)
 - [x] Hardpoint enemy counter
 - [x] Nuke counter: your career nuke total in game, with an optional goal
 - [x] Keystrokes: your bound movement keys and mouse in the HUD, lit while pressed, with a ring that shows which way the mouse moves
@@ -166,5 +170,6 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
 - [bigjakk/Electron-Websocket-Fix](https://github.com/bigjakk/Electron-Websocket-Fix) - aim-freeze fix
 - [bigjakk/Krunker-Civilian-Client](https://github.com/bigjakk/Krunker-Civilian-Client) - matchmaker, nuke counter, custom sky and keystrokes ideas
 - [Alx8g/wok-client](https://github.com/Alx8g/wok-client) - motion blur idea
+- [PC7 Client](https://github.com/PC7-Client/PC7-Client) and [Water Client](https://github.com/ghostypostie/Water) - ideas
 
 <hr>
