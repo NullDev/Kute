@@ -541,6 +541,12 @@ wrap_app! {
             if cmd.has_switch(Some(&CefString::from("ozone-platform"))) == 0 && use_x11() {
                 cmd.append_switch_with_value(Some(&CefString::from("ozone-platform")), Some(&CefString::from("x11")));
             }
+            // on native wayland the pacing patch waits for the compositor's frame feedback, which holds the game at the refresh
+            // rate and keeps hyprland/kwin from tearing. the disable list wins, so this also covers a bench and user_flags.json
+            #[cfg(target_os = "linux")]
+            if utils::cef_to_string(&cmd.switch_value(Some(&CefString::from("ozone-platform")))) != "x11" {
+                merge_list_switch(cmd, "disable-features", "KuteFramePacing");
+            }
         }
     }
 }
