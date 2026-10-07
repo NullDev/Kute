@@ -201,6 +201,7 @@ Object.defineProperty(window, "gameLoaded", {
         if (kute?.settings?.data?.betterChat) import("./modules/betterChat.js");
         if (kute?.settings?.data?.chatLogs) import("./modules/chatLogs.js");
         import("./modules/modDownload.js");
+        import("./modules/serverPings.js");
         if (kute?.settings?.data?.hpEnemyCounter) import("./modules/hpEnemyCounter.js");
         if (kute?.settings?.data?.accountManager) import("./modules/accountManager.js");
         if (kute?.settings?.data?.showPing) import("./modules/showPing.js");
