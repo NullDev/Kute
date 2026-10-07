@@ -199,6 +199,7 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/hudEditor/index.js");
         if (kute?.settings?.data?.hsSound) import("./modules/hsSound.js");
         if (kute?.settings?.data?.betterChat) import("./modules/betterChat.js");
+        if (kute?.settings?.data?.chatLogs) import("./modules/chatLogs.js");
         if (kute?.settings?.data?.hpEnemyCounter) import("./modules/hpEnemyCounter.js");
         if (kute?.settings?.data?.accountManager) import("./modules/accountManager.js");
         if (kute?.settings?.data?.showPing) import("./modules/showPing.js");

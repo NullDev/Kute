@@ -29,7 +29,16 @@ const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph"]);
  * @property {"window"|"toggle"} group
  * @property {Binding|null} fallback null: no key until the player picks one
  * @property {string} [setting] toggles: the checkbox setting it flips
+ * @property {() => void} [run] toggles without a setting: what the key does
  */
+
+function openChatLogs(){
+    if (kute.settings.data.chatLogs === false || !kute.chatLogs){
+        kute.showNotification("Chat Logs is off in the settings", false, 3);
+        return;
+    }
+    kute.chatLogs.toggle();
+}
 
 /**
  * @param {number} key
@@ -47,6 +56,7 @@ const ACTIONS = [
     { id: "devtools", label: "Developer tools", group: "window", fallback: plain(123, "F12") },
     { id: "toggleSpotify", label: "Spotify overlay", note: "on and off", group: "toggle", fallback: null, setting: "spotifyOverlay" },
     { id: "toggleKeystrokes", label: "Keystrokes", note: "on and off", group: "toggle", fallback: null, setting: "keystrokes" },
+    { id: "chatLogs", label: "Chat logs", note: "open and close", group: "toggle", fallback: plain(112, "F1"), run: openChatLogs },
 ];
 
 /**
@@ -192,7 +202,9 @@ function clashes(action, binding, current){
  * @return {boolean} the player is typing (chat, a search field), keys are text then
  */
 function typing(){
-    const active = document.activeElement;
+    let active = document.activeElement;
+    // kute's popups live in shadow roots, the document only sees their host
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
     return active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || (active instanceof HTMLElement && active.isContentEditable);
 }
 
@@ -358,8 +370,9 @@ class Hotkeys {
         if (this.capturing || event.repeat || typing() || !hostSupports()) return;
         const current = bindings();
         for (const action of ACTIONS){
-            if (action.group !== "toggle" || !action.setting || !same(event, current[action.id])) continue;
-            this.flip(action.setting, action.label);
+            if (action.group !== "toggle" || !same(event, current[action.id])) continue;
+            if (action.run) action.run();
+            else if (action.setting) this.flip(action.setting, action.label);
         }
     }
 

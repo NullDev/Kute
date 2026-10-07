@@ -22,7 +22,7 @@
     "hotkeys": {
         "name": "Hotkeys",
         "id": "hotkeys",
-        "description": "Change or clear Kute's own keys (new lobby, matchmaker, reload, fullscreen) and add keys for toggles",
+        "description": "Change or clear Kute's own keys (new lobby, matchmaker, reload, fullscreen, chat logs) and add keys for toggles",
         "type": "none",
         "category": "General",
         "button": "Change",
@@ -202,6 +202,16 @@
         "type": "checkbox",
         "category": "Interface",
         "defaultValue": true
+    },
+    "chatLogs": {
+        "name": "Chat Logs",
+        "id": "chatLogs",
+        "description": "Keeps the last 2000 chat lines, also across lobbies, to search and copy. F1 opens them, change it in Hotkeys",
+        "type": "checkbox",
+        "category": "Interface",
+        "defaultValue": true,
+        "button": "Open",
+        "buttonAction": "{{kute}}.chatLogs?.open()"
     },
     "textSelect": {
         "name": "Selectable Chat",
