@@ -34,7 +34,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] **Proper** Raw input (100%)
 - [x] Increased performance tweaks (chromium & CEF flags, game settings, system optimizations)
 - [x] Auto-Detect Best Settings: Client benchmarks your PC and automatically selects the optimal settings for performance and stability. Can be reverted at any time
-- [x] Disable all non-performance features: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
+- [x] Disable & hide all non-performance settings: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
 - [x] Laptops with two graphics chips are recognized: Kute picks the fast one in Windows' graphics settings once, and starts without the swapchain hook there. On Linux, NVIDIA PRIME render offload puts the game on the NVIDIA chip
 - [x] Laptop Power Boost (optional): a plugged in laptop runs on Windows' Best performance mode while Kute is open, and gets its own mode back after
 - [x] NVIDIA driver caps lifted for Kute only: its own driver profile
