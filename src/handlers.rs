@@ -46,6 +46,21 @@ wrap_task! {
     }
 }
 
+wrap_task! {
+    struct HotkeyTask {
+        browser_id: i32,
+        action: modules::hotkeys::Action,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(browser) = window::browser_by_id(self.browser_id) {
+                window::handle_accelerator_key(&browser, self.action);
+            }
+        }
+    }
+}
+
 // loads a mod page in the main window after on_before_popup returned
 wrap_task! {
     struct LoadInMainTask {
@@ -219,8 +234,10 @@ wrap_keyboard_handler! {
             if event.type_ != KeyEventType::RAWKEYDOWN {
                 return 0;
             }
+            // after the key: a resize closes a focused popup (color picker), chromium then sends the key into the freed widget
             if let Some(action) = crate::modules::hotkeys::action_for(event.windows_key_code, event.modifiers) {
-                window::handle_accelerator_key(browser, action);
+                let mut task = HotkeyTask::new(browser.identifier(), action);
+                post_task(ThreadId::UI, Some(&mut task));
             }
             0
         }
