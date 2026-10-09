@@ -901,7 +901,16 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
             }
         }
         ["get-info"] => {
+            // auto-detect mutes the browser for its test match, a page that died mid run would leave it muted
+            if let Some(host) = browser.host() {
+                host.set_audio_muted(0);
+            }
             bridge::send_info(frame);
+        }
+        ["mute", value] => {
+            if let Some(host) = browser.host() {
+                host.set_audio_muted(value.parse::<bool>().unwrap_or(false).into());
+            }
         }
         // dev badge proof, the token never leaves this process
         ["dev-proof", nonce, game, hash] => {
