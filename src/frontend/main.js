@@ -168,6 +168,7 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/changelog.js");
         import("./modules/about.js");
         import("./modules/managers/index.js");
+        import("./modules/withdrawn.js");
         import("./modules/autoDetect/index.js");
         if (kute?.settings?.data?.clanColors !== false && kute?.settings?.data?.disableOnlineFeatures !== true) import("./modules/clanColors.js");
         // always: setting only toggles drawing, announce runs regardless
