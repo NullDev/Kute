@@ -127,6 +127,22 @@ unsafe fn create_swapchain_unmodified(
     }
 }
 
+// chromium makes a chain per hwnd: the game window, 16x16 internal surfaces, and popups such as a <select> list,
+// which is over 200 px both ways on a scaled display (a region dropdown got prepared and captured as the game once).
+// the host writes the main window's client size, before that only the tiny surfaces are told apart
+fn is_game_sized(width: u32, height: u32) -> bool {
+    let shared = SHARED_MEM_PTR.load(Ordering::Acquire);
+    let size = if shared != 0 {
+        unsafe { shared!(shared, window_size).load(Ordering::Relaxed) }
+    } else {
+        0
+    };
+    if size == 0 {
+        return width >= 200 && height >= 200;
+    }
+    (size >> 32) as u32 == width && size as u32 == height
+}
+
 pub(crate) unsafe extern "system" fn create_swapchain_hk(
     this: *mut c_void,
     pdevice: *mut c_void,
@@ -135,9 +151,12 @@ pub(crate) unsafe extern "system" fn create_swapchain_hk(
     ppswapchain: *mut *mut c_void,
 ) -> HRESULT {
     unsafe {
-        // skip chromium's tiny internal surfaces (16x16)
-        if (*pdesc).Width < 200 || (*pdesc).Height < 200 {
-            debug_print!("render: swap chain {}x{} left alone (under 200 px)", (*pdesc).Width, (*pdesc).Height);
+        if !is_game_sized((*pdesc).Width, (*pdesc).Height) {
+            debug_print!(
+                "render: swap chain {}x{} left alone (not the game window's size)",
+                (*pdesc).Width,
+                (*pdesc).Height
+            );
             return create_swapchain_unmodified(this, pdevice, pdesc, prestricttooutput, ppswapchain);
         }
         debug_print!(

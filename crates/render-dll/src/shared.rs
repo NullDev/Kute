@@ -23,6 +23,8 @@ pub(crate) struct SharedState {
     pub(crate) render_adapter: u64,
     // low byte HOOK_*, bit 4 HOOK_MISMATCH, bits 8 and up: microseconds the Present1 hook took to install
     pub(crate) hook_state: u64,
+    // main window client size in physical px (width << 32 | height), 0 until the host wrote it
+    pub(crate) window_size: u64,
 }
 pub(crate) const LIMITER_VIZ: u64 = 1;
 pub(crate) const LIMITER_HR_TIMER: u64 = 2;
