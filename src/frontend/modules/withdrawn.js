@@ -1,8 +1,5 @@
 import { kute } from "../client.js";
 
-// scoreboardName.js shipped with 1.1.0 (bundle 0.1.88), seeded off into every scripts folder, and turned out to be
-// against krunker's tos. the manager's own commands take it out again: off, then recycle bin. only the shipped copy
-// by its header, a script of the player's own under that name stays
 const WITHDRAWN = [{ key: "scoreboardName.js", name: "Scoreboard Name", author: "Kute" }];
 const DONE_KEY = "kute_withdrawn";
 // an exe without the manager commands never answers
