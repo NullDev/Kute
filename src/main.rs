@@ -137,6 +137,8 @@ fn main() {
         modules::lifecycle::set_panic_hook().ok();
         modules::updater::installer_cleanup().ok();
     }
+    #[cfg(windows)]
+    modules::lifecycle::set_crash_filter();
 
     if let Err(e) = app::init_fs() {
         eprintln!("failed to set all the files in place {}", e);

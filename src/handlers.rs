@@ -999,6 +999,11 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         ["close"] => {
             window::close_all();
         }
+        // proves the native crash filter writes its files, dev builds only
+        #[cfg(feature = "verbose-logs")]
+        ["crash-test"] => unsafe {
+            std::ptr::write_volatile(std::ptr::without_provenance_mut::<u8>(1), 1);
+        },
         ["restart"] => {
             modules::lifecycle::restart();
         }
