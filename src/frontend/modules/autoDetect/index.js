@@ -596,10 +596,14 @@ class Panel {
      * @param {string} title
      * @param {string} line
      * @param {{label: string, onPick: () => void}[]} choices
+     * @param {string} [note] yellow warning under the line
      */
-    choose(title, line, choices){
+    choose(title, line, choices, note){
         this.element("adTitle").textContent = title;
         this.element("adStatus").textContent = line;
+        const noteElement = this.element("adNote");
+        noteElement.textContent = note ?? "";
+        noteElement.style.display = note ? "block" : "none";
         this.element("adBar").style.display = "none";
         this.element("adHint").style.display = "none";
         const actions = this.element("adActions");
@@ -621,6 +625,7 @@ class Panel {
     result(summary, actions = {}){
         this.element("adTitle").textContent = summary.title;
         this.element("adStatus").textContent = summary.line;
+        this.element("adNote").style.display = "none";
         this.element("adBar").style.display = "none";
         this.element("adHint").style.display = "none";
         this.element("adActions").style.display = "flex";
@@ -683,6 +688,21 @@ class Panel {
     close(){
         this.overlay.remove();
     }
+}
+
+/**
+ * @param {boolean} muted
+ */
+function mute(muted){
+    if (kute.hostFeatures?.includes("mute")) window.chrome.webview.postMessage(`mute, ${muted}`);
+}
+
+/**
+ * @return {string} what the player sees and hears during a run, asked for by players who got no heads up
+ */
+function runNote(){
+    const sound = kute.hostFeatures?.includes("mute") ? " The game is muted meanwhile." : "";
+    return `Takes about two minutes. Don't touch mouse or keyboard meanwhile: a test window opens and closes a few times, then Kute plays a private match by itself, turning the view and firing.${sound}`;
 }
 
 /**
@@ -952,6 +972,8 @@ class AutoDetect {
         }
         finally {
             document.removeEventListener("keydown", onKey, true);
+            // the mute is on the browser, not the page: it would survive the navigation home
+            mute(false);
             window.chrome.webview.postMessage("throttle, menu");
             this.running = false;
         }
@@ -1028,6 +1050,7 @@ class AutoDetect {
         }
 
         panel.progress("Opening a private test match", 0.38);
+        mute(true);
         panel.clickThrough(true);
         const room = await hostLobby();
         let joined = false;
@@ -1682,7 +1705,7 @@ class AutoDetect {
         const panel = new Panel();
         panel.choose(
             "Set Kute up for this PC?",
-            "Kute can set the game up for what this PC can do: it measures in a private test match for about a minute, and everything it changes can be undone. You have to be logged in for that.",
+            "Kute can set the game up for what this PC can do: it measures in a private test match, and everything it changes can be undone. You have to be logged in for that.",
             [
                 {
                     label: "Yes",
@@ -1706,6 +1729,7 @@ class AutoDetect {
                     },
                 },
             ],
+            runNote(),
         );
     }
 
@@ -1817,6 +1841,7 @@ class AutoDetect {
                     },
                 },
             ],
+            runNote(),
         );
     }
 
