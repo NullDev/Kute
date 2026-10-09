@@ -23,6 +23,12 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 
 <hr>
 
+> [!NOTE]
+> Was AI used in the development of this client? Yes, **but**: <br>
+> I use Claude to help with faster development, documentation and testing. Every single line of code is audited by me, and the AI is not allowed to touch performance critical code, unless it's for a _really_ good reason. These are still handwritten. The models operate on very strict rules and guidelines, such as what to touch, how to test and benchmark changes, best practices, and everything is reviewed and tested by me in addition to that. As such, AI-Generated PRs will be [rejected](https://github.com/NullDev/Kute/blob/master/CONTRIBUTING.md). This is not a vibe-coded project. The website at kute.lol on the other hand was entirely designed by AI. Because I can't be bothered to do frontend dev.
+
+<hr>
+
 ## :star: Features
 
 - [x] Runs on its own bundled Chromium (CEF), no browser or runtime install needed
