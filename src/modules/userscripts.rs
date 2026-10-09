@@ -15,7 +15,6 @@ pub const GROUPS: [(&str, &str, &str, &str); 2] = [
 const SHIPPED: &[(&str, &str)] = &[
     ("classRoulette.js", include_str!("../../resources/userscripts/classRoulette.js")),
     ("quickSellByRarity.js", include_str!("../../resources/userscripts/quickSellByRarity.js")),
-    ("scoreboardName.js", include_str!("../../resources/userscripts/scoreboardName.js")),
 ];
 
 const MAX_SOURCE: usize = 4 * 1024 * 1024;
