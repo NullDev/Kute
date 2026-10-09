@@ -85,7 +85,6 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Rebindable kute hotkeys
 - [x] Matchmaker
 - [x] Spotify overlay - by [@Liamoulee](https://github.com/Liamoulee)
-- [ ] Skin Swapper (coming soon, maybe)
 - [ ] BetterKDR™️ (coming soon)
 - [ ] Bloomberg-style trading terminal & market analysis (coming soon)
 - [x] and more...
