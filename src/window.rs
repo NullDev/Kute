@@ -748,7 +748,11 @@ unsafe fn wnd_proc_common(window: &mut Window, hwnd: HWND, msg: u32, wparam: WPA
                 return Some(result);
             }
             WM_SIZE => {
-                window.resize_browser(utils::LOWORD(lparam.0 as usize) as i32, utils::HIWORD(lparam.0 as usize) as i32);
+                let (width, height) = (utils::LOWORD(lparam.0 as usize), utils::HIWORD(lparam.0 as usize));
+                if !window.is_subwindow {
+                    crate::app::set_window_size(width as u32, height as u32);
+                }
+                window.resize_browser(width as i32, height as i32);
             }
             WM_DPICHANGED if !window.state.fullscreen => {
                 let suggested = *(lparam.0 as *const RECT);

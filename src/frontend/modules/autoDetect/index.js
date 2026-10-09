@@ -562,6 +562,8 @@ class Panel {
     constructor(){
         document.querySelector("#adPanelHost")?.parentElement?.remove();
         this.overlay = document.createElement("div");
+        /** @type {((event: KeyboardEvent) => void)|undefined} */
+        this.onEscape = undefined;
         // nearly opaque, the game looks weird while measuring
         this.overlay.style.cssText =
             "position:fixed;inset:0;z-index:2147483000;display:flex;justify-content:center;align-items:center;background:rgba(0,0,0,0.93)";
@@ -595,11 +597,29 @@ class Panel {
      *
      * @param {string} title
      * @param {string} line
-     * @param {{label: string, onPick: () => void}[]} choices
+     * @param {{label: string, onPick: () => void, cancel?: boolean}[]} choices
+     * @param {string} [note] yellow warning under the line
      */
-    choose(title, line, choices){
+    choose(title, line, choices, note){
+        this.unbindEscape();
+        const cancel = choices.find((choice) => choice.cancel);
+        // a click outside the panel cancels too
+        this.overlay.onclick = cancel ? (event) => {
+            if (event.target === this.overlay) cancel.onPick();
+        } : null;
+        if (cancel){
+            this.onEscape = (/** @type {KeyboardEvent} */ event) => {
+                if (event.key !== "Escape") return;
+                event.stopPropagation();
+                cancel.onPick();
+            };
+            document.addEventListener("keydown", this.onEscape, true);
+        }
         this.element("adTitle").textContent = title;
         this.element("adStatus").textContent = line;
+        const noteElement = this.element("adNote");
+        noteElement.textContent = note ?? "";
+        noteElement.style.display = note ? "block" : "none";
         this.element("adBar").style.display = "none";
         this.element("adHint").style.display = "none";
         const actions = this.element("adActions");
@@ -621,6 +641,7 @@ class Panel {
     result(summary, actions = {}){
         this.element("adTitle").textContent = summary.title;
         this.element("adStatus").textContent = summary.line;
+        this.element("adNote").style.display = "none";
         this.element("adBar").style.display = "none";
         this.element("adHint").style.display = "none";
         this.element("adActions").style.display = "flex";
@@ -680,9 +701,30 @@ class Panel {
         this.overlay.style.pointerEvents = enabled ? "none" : "";
     }
 
+    unbindEscape(){
+        if (this.onEscape) document.removeEventListener("keydown", this.onEscape, true);
+        this.onEscape = undefined;
+    }
+
     close(){
+        this.unbindEscape();
         this.overlay.remove();
     }
+}
+
+/**
+ * @param {boolean} muted
+ */
+function mute(muted){
+    if (kute.hostFeatures?.includes("mute")) window.chrome.webview.postMessage(`mute, ${muted}`);
+}
+
+/**
+ * @return {string} what the player sees and hears during a run, asked for by players who got no heads up
+ */
+function runNote(){
+    const sound = kute.hostFeatures?.includes("mute") ? " The game is muted meanwhile." : "";
+    return `Takes about two minutes. Don't touch mouse or keyboard meanwhile: a test window opens and closes a few times, then Kute plays a private match by itself, turning the view and firing.${sound}`;
 }
 
 /**
@@ -952,6 +994,8 @@ class AutoDetect {
         }
         finally {
             document.removeEventListener("keydown", onKey, true);
+            // the mute is on the browser, not the page: it would survive the navigation home
+            mute(false);
             window.chrome.webview.postMessage("throttle, menu");
             this.running = false;
         }
@@ -1028,6 +1072,7 @@ class AutoDetect {
         }
 
         panel.progress("Opening a private test match", 0.38);
+        mute(true);
         panel.clickThrough(true);
         const room = await hostLobby();
         let joined = false;
@@ -1682,7 +1727,7 @@ class AutoDetect {
         const panel = new Panel();
         panel.choose(
             "Set Kute up for this PC?",
-            "Kute can set the game up for what this PC can do: it measures in a private test match for about a minute, and everything it changes can be undone. You have to be logged in for that.",
+            "Kute can set the game up for what this PC can do: it measures in a private test match, and everything it changes can be undone. You have to be logged in for that.",
             [
                 {
                     label: "Yes",
@@ -1699,14 +1744,23 @@ class AutoDetect {
                 },
                 {
                     label: "No",
-                    onPick: () => {
-                        panel.close();
-                        this.remember("declined");
-                        kute.showNotification("Got it. You can always start the setup from Settings, Client", false, 5);
-                    },
+                    cancel: true,
+                    onPick: () => this.decline(panel),
                 },
             ],
+            runNote(),
         );
+    }
+
+    /**
+     * a stored setup step would reopen the popup on every start, so a cancel has to clear it
+     *
+     * @param {Panel} panel
+     */
+    decline(panel){
+        panel.close();
+        this.remember("declined");
+        kute.showNotification("Got it. You can always start the setup from Settings, Client", false, 5);
     }
 
     /**
@@ -1766,6 +1820,11 @@ class AutoDetect {
                     this.remember("later");
                 },
             },
+            {
+                label: "Cancel",
+                cancel: true,
+                onPick: () => this.decline(panel),
+            },
         ]);
     }
 
@@ -1816,7 +1875,13 @@ class AutoDetect {
                         this.start();
                     },
                 },
+                {
+                    label: "Cancel",
+                    cancel: true,
+                    onPick: () => this.decline(panel),
+                },
             ],
+            runNote(),
         );
     }
 

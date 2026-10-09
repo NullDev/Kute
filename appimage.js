@@ -10,6 +10,10 @@ const outPath = path.join(process.cwd(), "target", "kute-x86_64.AppImage");
 // pinned, "continuous" moves under a release build. APPIMAGETOOL points at a local copy instead
 const toolUrl = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage";
 const toolPath = process.env.APPIMAGETOOL ?? path.join(process.cwd(), "target", "tools", "appimagetool-1.9.1-x86_64.AppImage");
+// appimagehub wants the desktop file and the metainfo named after this
+const appId = "lol.kute.Kute";
+const version = /^version = "([^"]+)"/m.exec(fs.readFileSync(path.join(process.cwd(), "Cargo.toml"), "utf8"))?.[1];
+const screenshotBase = "https://raw.githubusercontent.com/NullDev/Kute/master/resources/screenshots";
 
 // the binary is called kute, everything cef needs sits next to it (rpath $ORIGIN)
 const appRun = `#!/bin/sh
@@ -29,6 +33,52 @@ StartupWMClass=kute
 Terminal=false
 `;
 
+// screenshots are urls, they only resolve once resources/screenshots is on master
+const metainfo = `<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>${appId}</id>
+  <name>Kute</name>
+  <summary>High-performance Krunker client</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="lol.kute">
+    <name>NullDev</name>
+  </developer>
+  <description>
+    <p>Kute is a Krunker.io client running on its own patched Chromium (CEF). It brings uncapped FPS with an exact frame limiter, native raw mouse input and the aim freeze fix of uncapped clients.</p>
+    <p>It also comes with a resource swapper, userscripts, a HUD editor, a matchmaker, an account manager and Auto-Detect Best Settings, which benchmarks your PC and keeps only what measurably runs better.</p>
+  </description>
+  <launchable type="desktop-id">${appId}.desktop</launchable>
+  <url type="homepage">https://kute.lol</url>
+  <url type="bugtracker">https://github.com/NullDev/Kute/issues</url>
+  <url type="vcs-browser">https://github.com/NullDev/Kute</url>
+  <categories>
+    <category>Game</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">intense</content_attribute>
+    <content_attribute id="social-chat">intense</content_attribute>
+  </content_rating>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Client settings inside Krunker</caption>
+      <image>${screenshotBase}/settings.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>HUD editor</caption>
+      <image>${screenshotBase}/hud-editor.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Resource swapper and userscripts</caption>
+      <image>${screenshotBase}/swapper.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="${version}" date="${new Date().toISOString().slice(0, 10)}"/>
+  </releases>
+</component>
+`;
+
 /**
  * @return {Promise<string>}
  */
@@ -45,6 +95,7 @@ async function appimagetool(){
 
 try {
     if (process.platform !== "linux") throw new Error("AppImages are built on linux");
+    if (!version) throw new Error("no version in Cargo.toml");
 
     fs.rmSync(appDir, { recursive: true, force: true });
     fs.rmSync(outPath, { force: true });
@@ -53,7 +104,9 @@ try {
     fs.copyFileSync(path.join(releaseDir, "kute"), path.join(appDir, "kute"));
     fs.chmodSync(path.join(appDir, "kute"), 0o755);
     fs.writeFileSync(path.join(appDir, "AppRun"), appRun, { mode: 0o755 });
-    fs.writeFileSync(path.join(appDir, "kute.desktop"), desktopEntry);
+    fs.writeFileSync(path.join(appDir, `${appId}.desktop`), desktopEntry);
+    fs.mkdirSync(path.join(appDir, "usr", "share", "metainfo"), { recursive: true });
+    fs.writeFileSync(path.join(appDir, "usr", "share", "metainfo", `${appId}.metainfo.xml`), metainfo);
     fs.copyFileSync(path.join(process.cwd(), "resources", "kute-256.png"), path.join(appDir, "kute.png"));
     fs.copyFileSync(path.join(process.cwd(), "resources", "kute-256.png"), path.join(appDir, ".DirIcon"));
 

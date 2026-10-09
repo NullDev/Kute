@@ -9,7 +9,15 @@ use std::{backtrace, env, fs, io, io::Read, panic, process};
 #[cfg(windows)]
 use windows::{
     Win32::Foundation::*,
-    Win32::System::{DataExchange::COPYDATASTRUCT, Threading::CreateMutexW},
+    Win32::Storage::FileSystem::{CREATE_ALWAYS, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE, FILE_SHARE_NONE},
+    Win32::System::Diagnostics::Debug::*,
+    Win32::System::LibraryLoader::{
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, GetModuleFileNameW, GetModuleHandleExW,
+    },
+    Win32::System::{
+        DataExchange::COPYDATASTRUCT,
+        Threading::{CreateMutexW, GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId},
+    },
     Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::*},
     core::*,
 };
@@ -35,6 +43,120 @@ pub fn read_js_bundle() -> io::Result<String> {
 
 fn crash_log_path() -> std::path::PathBuf {
     utils::settings_dir().join("crash_log.txt")
+}
+
+// a crash inside libcef or a driver is no rust panic: the panic hook never runs and the client just vanishes
+// (three "it randomly closes" reports without a crash_log.txt, 2026-10-09)
+#[cfg(windows)]
+pub fn set_crash_filter() {
+    unsafe {
+        SetUnhandledExceptionFilter(Some(crash_filter));
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn crash_filter(info: *const EXCEPTION_POINTERS) -> i32 {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static ONCE: AtomicBool = AtomicBool::new(false);
+    if ONCE.swap(true, Ordering::SeqCst) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    unsafe {
+        crate::modules::power::put_back();
+        let record = if info.is_null() { std::ptr::null() } else { (*info).ExceptionRecord };
+        let (code, address) = if record.is_null() {
+            (0u32, 0usize)
+        } else {
+            ((*record).ExceptionCode.0 as u32, (*record).ExceptionAddress as usize)
+        };
+        let dir = utils::settings_dir();
+        fs::create_dir_all(&dir).ok();
+        let dump_path = dir.join("crash.dmp");
+        let dumped = write_minidump(&dump_path, info);
+        let log_path = crash_log_path();
+        let message = format!(
+            "Version: {}\nNative crash, not a rust panic\nException: {code:#010x}\nAddress: {}\nThread: {}\nMinidump: {}\n",
+            env!("CARGO_PKG_VERSION"),
+            module_offset(address),
+            GetCurrentThreadId(),
+            if dumped { dump_path.display().to_string() } else { "not written".to_string() },
+        );
+        fs::write(&log_path, &message).ok();
+        let result = MessageBoxW(
+            None,
+            PCWSTR(
+                create_utf_string(format!(
+                    "Kute crashed. A crash report has been saved to:\n\
+                    {}\n\n\
+                    Click Yes to open the log.",
+                    log_path.display()
+                ))
+                .as_ptr(),
+            ),
+            PCWSTR(create_utf_string("Application Error").as_ptr()),
+            MB_YESNO | MB_ICONERROR,
+        );
+        if result == IDYES {
+            ShellExecuteW(
+                None,
+                PCWSTR(create_utf_string("open").as_ptr()),
+                PCWSTR(create_utf_string(log_path.to_string_lossy()).as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOW,
+            );
+        }
+    }
+    EXCEPTION_CONTINUE_SEARCH
+}
+
+#[cfg(windows)]
+unsafe fn module_offset(address: usize) -> String {
+    let mut module = HMODULE::default();
+    let flags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+    if address == 0 || unsafe { GetModuleHandleExW(flags, PCWSTR(address as *const u16), &mut module) }.is_err() {
+        return format!("{address:#x}");
+    }
+    let mut name = [0u16; 260];
+    let len = unsafe { GetModuleFileNameW(Some(module), &mut name) } as usize;
+    let path = String::from_utf16_lossy(&name[..len]);
+    let file = path.rsplit(['\\', '/']).next().unwrap_or(&path);
+    format!("{file}+{:#x} ({address:#x})", address - module.0 as usize)
+}
+
+// stacks, threads and the module list, a few MB, stays on the pc like crash_log.txt
+#[cfg(windows)]
+unsafe fn write_minidump(path: &std::path::Path, info: *const EXCEPTION_POINTERS) -> bool {
+    unsafe {
+        let Ok(file) = CreateFileW(
+            PCWSTR(create_utf_string(path.to_string_lossy()).as_ptr()),
+            FILE_GENERIC_WRITE.0,
+            FILE_SHARE_NONE,
+            None,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            None,
+        ) else {
+            return false;
+        };
+        let exception = MINIDUMP_EXCEPTION_INFORMATION {
+            ThreadId: GetCurrentThreadId(),
+            ExceptionPointers: info as *mut EXCEPTION_POINTERS,
+            ClientPointers: false.into(),
+        };
+        let exception_param = (!info.is_null()).then_some(&exception as *const MINIDUMP_EXCEPTION_INFORMATION);
+        let result = MiniDumpWriteDump(
+            GetCurrentProcess(),
+            GetCurrentProcessId(),
+            file,
+            MiniDumpNormal | MiniDumpWithThreadInfo,
+            exception_param,
+            None,
+            None,
+        );
+        CloseHandle(file).ok();
+        result.is_ok()
+    }
 }
 
 pub fn set_panic_hook() -> io::Result<()> {

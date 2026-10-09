@@ -23,6 +23,12 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 
 <hr>
 
+> [!NOTE]
+> Was AI used in the development of this client? Yes, **but**: <br>
+> I use Claude to help with faster development, documentation and testing. Every single line of code is audited by me, and the AI is not allowed to touch performance critical code, unless it's for a _really_ good reason. These are still handwritten. The models operate on very strict rules and guidelines, such as what to touch, how to test and benchmark changes, best practices, and everything is reviewed and tested by me in addition to that. As such, AI-Generated PRs will be [rejected](https://github.com/NullDev/Kute/blob/master/CONTRIBUTING.md). This is not a vibe-coded project. The website at kute.lol on the other hand was entirely designed by AI. Because I can't be bothered to do frontend dev.
+
+<hr>
+
 ## :star: Features
 
 - [x] Runs on its own bundled Chromium (CEF), no browser or runtime install needed
@@ -34,7 +40,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] **Proper** Raw input (100%)
 - [x] Increased performance tweaks (chromium & CEF flags, game settings, system optimizations)
 - [x] Auto-Detect Best Settings: Client benchmarks your PC and automatically selects the optimal settings for performance and stability. Can be reverted at any time
-- [x] Disable all non-performance features: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
+- [x] Disable & hide all non-performance settings: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
 - [x] Laptops with two graphics chips are recognized: Kute picks the fast one in Windows' graphics settings once, and starts without the swapchain hook there. On Linux, NVIDIA PRIME render offload puts the game on the NVIDIA chip
 - [x] Laptop Power Boost (optional): a plugged in laptop runs on Windows' Best performance mode while Kute is open, and gets its own mode back after
 - [x] NVIDIA driver caps lifted for Kute only: its own driver profile
@@ -50,7 +56,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] All settings togglable
 - [x] Export and import Kute's settings (client settings, HUD positions, matchmaker filters, hotkeys) as one file, for a second PC or a fresh install
 - [x] Battle pass claim-all
-- [x] Userscripts (Crankshaft and idkr formats) with an in-client manager: live on/off, script settings, a built-in editor, drag and drop. Ships with example scripts, off by default: Class Roulette draws a random class on every respawn (Sharp Shooter in any mode), with a toggle per class and a "don't repeat the last N" option; Quick Sell by Rarity sells every quick sellable item of one rarity at once, with a preview of items and KR and a confirmation before anything is sold
+- [x] Userscripts (Crankshaft and idkr formats) with an in-client manager: live on/off, script settings, a built-in editor, drag and drop. Ships with example scripts, off by default: Class Roulette draws a random class on every respawn (Sharp Shooter in any mode), with a toggle per class and a "don't repeat the last N" option; Quick Sell by Rarity sells every quick sellable item of one rarity at once, with a preview of items and KR and a confirmation before anything is sold; Scoreboard Name shows a name of your choice instead of your own in the leaderboard, the tab list and the end screen, only on your screen
 - [x] Mod compatibility: mods, lobby and invite links open in the game window instead of a second one that would end your match
 - [x] One-click mod download: a download button on every mod in Krunker's Mods window saves its zip to your Downloads folder
 - [x] OBS capture plugin (shared texture game capture plus a dedicated audio window)

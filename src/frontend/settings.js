@@ -451,6 +451,12 @@ class SettingsManager {
                     ${label}<span class="material-icons">${icon}</span></div>`)
                 .join("")}</div>`;
         }
+        // also during a search, that is where people look for the rows it hides
+        const banner = kute.settings.data.performanceMode === true && kute.hostFeatures?.includes(settings.performanceMode.hostFeature ?? "");
+        if (banner){
+            tempHTML += `<div class="kuteHiddenBanner"><span class="material-icons">warning</span>
+                <div>Some settings are hidden because "${settings.performanceMode.name}" is on. Turn it off in General to see them again.</div></div>`;
+        }
         let previousCategory = null;
         // empty search result must render nothing, not an empty box
         let rendered = false;
@@ -486,7 +492,8 @@ class SettingsManager {
         }
 
         // closes category body and kuteSettings box only, rest is krunker's (see init)
-        return rendered ? `${tempHTML}</div></div>` : "";
+        if (rendered) return `${tempHTML}</div></div>`;
+        return banner ? `${tempHTML}</div>` : "";
     }
 }
 

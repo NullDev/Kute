@@ -44,6 +44,9 @@ const NAME_ELEMENTS = ".pListName, [class^=\"newLeaderName\"], [class^=\"leaderN
  * @return {string} name without clan tag and icons
  */
 function nameOf(nameElement){
+    // a userscript that renames a row keeps the real name here (scoreboardName.js)
+    const real = nameElement.getAttribute("data-kute-name");
+    if (real !== null) return real;
     let name = "";
     for (const node of nameElement.childNodes){
         if (node.nodeType === Node.TEXT_NODE) name += node.textContent ?? "";

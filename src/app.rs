@@ -47,6 +47,8 @@ pub(crate) struct SharedStats {
     pub(crate) limiter_mode: u64,
     pub(crate) render_adapter: u64,
     pub(crate) hook_state: u64,
+    // client area of the main window in physical px (width << 32 | height), the hook only prepares the chain of that size
+    pub(crate) window_size: u64,
 }
 const SHARED_STATS_SIZE: usize = std::mem::size_of::<SharedStats>();
 pub const LIMITER_VIZ: u64 = 1;
@@ -70,7 +72,7 @@ fn initial_fps_limit() -> u64 {
     }
 }
 
-// posix shm "/<name>", patch 09 opens it by name in the gpu process. a crash leaves 104 bytes in /dev/shm, the next start reuses them
+// posix shm "/<name>", patch 09 opens it by name in the gpu process. a crash leaves the file in /dev/shm, the next start reuses it
 #[cfg(target_os = "linux")]
 pub fn create_frame_timing_mapping() {
     let Ok(name) = std::ffi::CString::new(format!("/{}", modules::bench::timing_mapping_name())) else {
@@ -127,6 +129,14 @@ pub fn create_frame_timing_mapping() {
 pub fn set_target_fps(fps_limit: u64) {
     if let Some(target) = shared!(target_fps) {
         target.store(fps_limit, Ordering::Relaxed);
+    }
+}
+
+// chromium makes a swap chain per hwnd: a select popup on a scaled display is over 200 px both ways, so the hook
+// tells the game's chain by the main window's client size instead (a dropdown's chain got prepared and captured once)
+pub fn set_window_size(width: u32, height: u32) {
+    if let Some(size) = shared!(window_size) {
+        size.store(((width as u64) << 32) | height as u64, Ordering::Relaxed);
     }
 }
 
