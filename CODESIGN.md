@@ -1,0 +1,53 @@
+### This file serves as ownership verification for Certum Code Signing
+
+Author: `Christopher Binder`
+
+GitHub: https://github.com/NullDev
+
+Imprint : https://kute.lol/imprint.html
+
+```
+NullDev e.U.
+Christopher Binder
+Bergmanngasse 61a, TOP 4
+8010 Graz, Austria
+Email: legal@kute.lol
+```
+
+<hr>
+
+Public Keys: 
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDjDI94MQ3f1r47PkIfoO8FG0qYXUfQPK9xWJU1Ldq+8WSCnMLW95aCYly2UBNSm209Oe4Rjidw9+YXWDlMytuOkmvLEmjQIByuW3gRBSTuq2UCX82jbVwnHITiJzXV5XvyyPUqonEQD/bpmhpTC0PKNscQeZxnqA4WybXb4FNJMsdXhkkTgA+eGi/NPYMDRxrrvw1aHmXLXtjZvgKNz74B3/kzyOFHtIK+Pvdo76LdkuONtFt+WEnTMD7S8ojeJ6h688IOX8WRNC8alpqcPyM9udBLe4fPns7YP24ZxVaLAhw2vYQq+ngSKiUe2vaP9jDGbuq5ahqQaNCKdc4nt54nVwfw5BSm3KA/PZxSopbE9kuj7qbPl/H5FuNbAfYzTFlbJirVAEkLcAwv/CALnKA0XiMjtPIuRkLSDxCyjO7ysrHCpCid/FVp792PCBE7OkMCjihgPmRbANrmMKDTSO2TEZnVMHkeFkl5/Gh1GRwqHCtrfOukS2m/ZW69a7W2jp7xGMkQ2dUO2xHpwod5Wx/QCYGBJNkl2sgCb0HNG86OKnRE3PBQj/IPaOStagpsGMkdiCk1hfybfqnpo78f6KgRKxQY7UIMLvOD6fOFMIx3lTIp9Rf5eCBCHiEekDdtmriFm4FdqFduyKLP1p0ioPwka+M1BJFHu+Pz0HHQ+GGWuQ==
+```
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC/Bo5kwtHMyLX5i5rgbdA1HNocLXNw/xLLJAVRixkXXIGUtRvCid26yFBw2UyfKdyxy/BTpIm9Qx5rZgnZZW+KemJquSrvGS+gvdzICQb8/2TAJL5NKir4+0l+u8EEpyOQhKjTKxKkC6HWUqaT4QkCJF3eXMmuMFomE6DxZn404z6IUuxUb4zZIPPXOt3CLxfYNAj9fiS4BcxzoQS6LR8r+mi9IZh15an2Ctm2WJnq5dM5ry5SEp0iMU94gXOx/DzljBbgKpNoAUqPrOc7UVKgLb0VqTzjBauA8bXvO+GqugHxDs7sLmmmjFzQraOi2D1Bh1e9Pj2kDjaCS9XYI/2SkSmzEXk+DAX9hobz+fwAvQ2HxZYWLcUcTEQKWEkK2mILkfki4ZF22Wy502uqg9IPpRfYRiE0gQjac6bfhwKFVBp98ugIKMPK+iExOrvAWs9K6b4md8sxgdTHt7+t3hLizkvSbh5guVnyIh6OB9cicG4G9cMc1gNR2DM+38hsPXKu5ocmNFTem2rcM3WswMU7EmIpoRaiv0TbnWf3bxsShTX46bbK8HUs2jbfzBWMgpp2Fs5MMz2vvWBerq8Kx74SXPtz1hPsHlHVSu/w19oz7w1hEPxZfssoxtBI6iwjrEISOiYoy/IOzyR51OyQRRDbLByLvimqnmtmWj8NhV7PLQ==
+```
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD4fnV4FDaQaYdShyzNUbr6hXtXPTkg0zg13ijfbswQVna28gXDbLrpiABZUba2UImjiivxWJ2rk3h2KVLDPzxmL5oPkrXMOy3LhIXPMUsg1wuPR1XzCuXhnAt2Qv+y8CXhUrc9hLvC5D7l4EhaJjHm2xTDHXNAihiFicZS4LGyp+klMdJii8lUusokdNtNKq47AUraN9RnsVTyUp0X0VwBXVUh5fvpfaKcIyOoAHpTpCwOH+gnMMNxa3CXQLKoTtJ6XVk+ABdDKJL+CDazjJHUlEZhsjTczO9FkxnfRxYNwUUPFr84j02peOX6Q1CPXGzqfhV2CCiEmBYyubsERzKZ
+```
+
+<hr>
+
+Signature via https://keybase.io/nulldev
+
+```
+-----BEGIN PGP SIGNATURE-----
+Version: Keybase OpenPGP v2.1.17
+Comment: https://keybase.io/crypto
+
+wsFcBAABCgAGBQJq7eXkAAoJEMKz3k7wf5El7TIQAITtLmDIO36RZguwS0XdcQo6
+OES2UuFz5WvzT950tWm8JhfvYYoNDFNNPmHK7l+G7GEGlBAA0REQe2LjX5Rjqhp5
+iYwUdrqNymJR/VeeURE90bULRFGJlitzYP+zirqoOkIOXrY6lsZWLiX7+q13qe45
+Uwh0C1YN8PhOl0UqQ/RDuFX/fAmHnmwp+MlKNBkms2a9HQ0Mv3koGrbXtTZL14tL
+K78/u/KPsr1bF4QG4NWBnXWLFZdWznuRP1KTeeWRCDHHpq/Q3lSTWgjsIj3x6iYf
+uYyvsFGqGI5DHRAOPnRNsExEnmYEu6px5kUstmK1+cXWNXLFwFRcDeb6K0PQWCJ3
+ezJmJ9d5HlkVSTEhmEt3pSyby0EUGvnM+ljrAOebpc0FnoNPJ3LpGoUwuKmYcBEi
+jvK4xkgWoFH1+ixdv6bk+P8nz5uJy4o0/aWLgymVUYrfFlb5n+pqpMfB5w13RpLt
+eBJwI56yMvXJBkBcfxKhntJGilGSuqgrPL32QS21TgKDqct5ha6XgB+EnCTH+Qg8
+T+lBE7W26z/trYbXrekAIBDruQ692LoFw80P2PCcpFfxPN0+rEc76rPZ0OwCKRIu
+keGb43a9fh+jrBVC5GXpSwR0svn6ql5AFkQzDWvTYomX4p9o52VfV1Bng8KuSBGC
+lDuITiKdqy3sCEXm9xRY
+=rAx9
+-----END PGP SIGNATURE-----
+```
