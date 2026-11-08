@@ -236,11 +236,16 @@ fn kute_section() -> Value {
     let portable = utils::is_portable();
     #[cfg(target_os = "linux")]
     let portable = std::env::var_os("APPIMAGE").is_none();
+    #[cfg(windows)]
+    let update = crate::modules::updater::status_json();
+    #[cfg(target_os = "linux")]
+    let update = Value::Null;
     json!({
         "version": env!("CARGO_PKG_VERSION"),
         "platform": std::env::consts::OS,
         // 0.0.0 until the updater looked, and in builds without it
         "bundle": { "version": *crate::JS_VERSION.lock().unwrap(), "downloadedBytes": downloaded_bundle },
+        "update": update,
         "cef": cef_version,
         "libcefBytes": libcef,
         "build": {

@@ -3,24 +3,11 @@ import { kute } from "../client.js";
 import { request } from "../utils.js";
 import { matches } from "./hotkeys.js";
 import { OFFICIAL_MAPS, mapImageUrl } from "./maps.js";
+import { DEFAULT_FILTER, MAP_FILTER, MODE_FILTER, normalizeMap, readLobbies } from "./matchmakerFilter.js";
 
 // ---
 // ported from the Krunker Civilian Client (GPL-3.0) <3
 // ---
-
-// index = gamemode id in the game list (game[4].g)
-const GAMEMODES = [
-    "Free for All", "Team Deathmatch", "Hardpoint", "Capture the Flag", "Parkour", "Hide & Seek", "Infected", "Race",
-    "Last Man Standing", "Simon Says", "Gun Game", "Prop Hunt", "Boss Hunt", "Classic FFA", "Deposit", "Stalker",
-    "King of the Hill", "One in the Chamber", "Trade", "Kill Confirmed", "Defuse", "Sharp Shooter", "Traitor", "Raid",
-    "Blitz", "Domination", "Squad Deathmatch", "Kranked FFA", "Team Defender", "Deposit FFA", "Chaos Snipers", "Bighead FFA",
-];
-
-const MODE_FILTER = [
-    "Free for All", "Team Deathmatch", "Hardpoint", "Capture the Flag", "Parkour", "Gun Game", "Classic FFA", "Deposit",
-    "Kill Confirmed", "Sharp Shooter", "Domination", "Kranked FFA", "Team Defender", "Deposit FFA", "Chaos Snipers",
-    "Bighead FFA",
-];
 
 /** @type {Record<string, string>} keyed by game id prefix */
 const REGIONS = {
@@ -28,32 +15,10 @@ const REGIONS = {
     SIN: "Singapore", DAL: "Dallas", BHN: "Bahrain", BRZ: "Brazil", NY: "New York",
 };
 
-// official maps. none picked means all of these, keeps community maps out
-const MAP_FILTER = [
-    "Burg", "Littletown", "Sandstorm", "Subzero", "Undergrowth", "Freight", "Lostworld", "Citadel", "Oasis", "Kanji",
-    "Industry", "Lumber", "Evacuation", "Site", "SkyTemple", "Lagoon", "Tropicano", "Habitat", "Atomic", "Old_Burg",
-    "Throwback", "Clockwork", "Bazaar", "Erupt", "HQ", "Lush", "Vivo", "Slide Moonlight", "Eterno Simulator", "Eterno Jump",
-    "Frontier", "Piazza", "Barnyard",
-];
-
 /** @type {Record<string, string>} */
 const MAP_NAMES = { SkyTemple: "Sky Temple", Krunk_Plaza: "Krunk Plaza", Old_Burg: "Old Burg" };
 
-/**
- * game list writes map ids its own way ("slide_moonlight"), so compare normalized
- *
- * @param {string} name
- * @return {string}
- */
-const normalizeMap = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
-
 const MAP_ICON_BY_NAME = new Map(OFFICIAL_MAPS.map((name, index) => [normalizeMap(name), index]));
-
-const DEFAULT_MAPS = new Set(MAP_FILTER.map(normalizeMap));
-// parkour maps have no round timer
-const UNTIMED_MAPS = new Set(["Eterno Jump", "Slide Moonlight"].map(normalizeMap));
-// the id goes into the join url as is
-const URL_UNSAFE = /[\s&#?/%\\]/;
 
 const GAME_LIST_URL = "https://matchmaker.krunker.io/game-list?hostname=krunker.io";
 const FETCH_TIMEOUT_MS = 10000;
@@ -65,50 +30,8 @@ const POST_SCAN_PAUSE_MS = 180;
 const FOUND_HOLD_MS = 1200;
 const NOT_FOUND_HOLD_MS = 1100;
 
-/**
- * @typedef {object} MatchmakerFilter
- * @property {string[]} regions game id prefixes
- * @property {string[]} modes
- * @property {string[]} maps
- * @property {string[]} preferredMaps tried first in this order, before ping and players
- * @property {string[]} preferredModes like preferredMaps, ranks above them
- * @property {number} minPlayers
- * @property {number} maxPlayers
- * @property {number} minTime seconds left in the round
- * @property {boolean} sortByPlayers most players first instead of lowest ping
- * @property {boolean} serverBrowser open the server browser when nothing matches
- * @property {boolean} animation show the search popup
- * @property {boolean} searchAfterMatch search again when the end screen shows
- */
-
-/** @type {MatchmakerFilter} */
-const DEFAULT_FILTER = {
-    regions: [],
-    modes: [],
-    maps: [],
-    preferredMaps: [],
-    preferredModes: [],
-    minPlayers: 1,
-    maxPlayers: 6,
-    minTime: 120,
-    sortByPlayers: false,
-    serverBrowser: true,
-    animation: true,
-    searchAfterMatch: false,
-};
-
-/**
- * @typedef {object} Lobby
- * @property {string} id
- * @property {string} region id prefix
- * @property {string} server region server id, pings are keyed by it
- * @property {number} players
- * @property {number} limit
- * @property {string} map
- * @property {string} mode
- * @property {number} timeLeft seconds, 0 = no round timer
- * @property {boolean} passes
- */
+/** @typedef {import("./matchmakerFilter.js").MatchmakerFilter} MatchmakerFilter */
+/** @typedef {import("./matchmakerFilter.js").Lobby} Lobby */
 
 /**
  * @param {number} ms
@@ -175,48 +98,6 @@ async function fetchGameList(){
     const response = await fetch(GAME_LIST_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     const result = await response.json();
     return Array.isArray(result?.games) ? result.games : [];
-}
-
-/**
- * @param {any[]} games
- * @param {MatchmakerFilter} filter
- * @return {Lobby[]}
- */
-function readLobbies(games, filter){
-    const maps = filter.maps.length > 0 ? new Set(filter.maps.map(normalizeMap)) : DEFAULT_MAPS;
-    return games.map((game) => {
-        const id = String(game[0]);
-        const details = game[4] ?? {};
-        // c 1 = custom game, oc 1 = custom game run by krunker (parkour, raids, events)
-        const official = details.c === 0 || details.oc === 1;
-        const map = String(details.i ?? "");
-        const mapId = normalizeMap(map);
-        /** @type {Lobby} */
-        const lobby = {
-            id,
-            region: id.split(":")[0],
-            server: String(game[1]),
-            players: Number(game[2]),
-            limit: Number(game[3]),
-            map,
-            mode: GAMEMODES[details.g] ?? "Unknown",
-            timeLeft: Number(game[5]),
-            passes: false,
-        };
-        lobby.passes =
-            official &&
-            !URL_UNSAFE.test(id) &&
-            (filter.regions.length === 0 || filter.regions.includes(lobby.region)) &&
-            (filter.modes.length === 0 || filter.modes.includes(lobby.mode)) &&
-            maps.has(mapId) &&
-            lobby.players >= filter.minPlayers &&
-            lobby.players <= filter.maxPlayers &&
-            lobby.players < lobby.limit &&
-            // 0 means no round timer, not "0 seconds left"
-            (lobby.timeLeft > 0 ? lobby.timeLeft >= filter.minTime : UNTIMED_MAPS.has(mapId)) &&
-            !location.href.includes(id);
-        return lobby;
-    });
 }
 
 class Matchmaker {
