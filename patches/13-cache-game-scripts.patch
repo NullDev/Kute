@@ -1,0 +1,58 @@
+diff --git a/net/http/http_cache_transaction.cc b/net/http/http_cache_transaction.cc
+index a23b427a54..1df8fae429 100644
+--- a/net/http/http_cache_transaction.cc
++++ b/net/http/http_cache_transaction.cc
+@@ -84,6 +84,41 @@ using CacheEntryStatus = HttpResponseInfo::CacheEntryStatus;
+ 
+ namespace {
+ 
++// kute: krunker serves its versioned scripts (pkg/loader-<build>.mjs, libs/*.js?build=<build>, static/index-<hash>.js,
++// pkg/core.dat-<build>.split-N) with "no-cache, no-store, must-revalidate", which switches off the http cache and with
++// it v8's code cache, so every lobby change downloads and parses them again (the main thread waited ~0.8 s per load on
++// a 12900K, 2026-11-08). The names carry the build, so the bodies are immutable in all but their headers. Off by
++// default, kute turns it on
++BASE_FEATURE(kKuteCacheGameScripts, base::FEATURE_DISABLED_BY_DEFAULT);
++
++bool KuteIsVersionedGameScript(const GURL& url) {
++  if (!url.SchemeIs("https") || url.host() != "krunker.io") {
++    return false;
++  }
++  std::string_view path = url.path();
++  if (path.starts_with("/pkg/loader-") && path.ends_with(".mjs")) {
++    return true;
++  }
++  if (path.starts_with("/pkg/core.dat-")) {
++    return true;
++  }
++  if (path.starts_with("/static/index-") && path.ends_with(".js")) {
++    return true;
++  }
++  if (path.starts_with("/libs/") && path.ends_with(".js")) {
++    return url.query().find("build=") != std::string_view::npos;
++  }
++  return false;
++}
++
++void KuteMakeImmutable(HttpResponseHeaders* headers) {
++  headers->RemoveHeader("cache-control");
++  headers->RemoveHeader("expires");
++  headers->RemoveHeader("pragma");
++  headers->AddHeader("Cache-Control", "public, max-age=31536000, immutable");
++}
++
++
+ constexpr base::TimeDelta kStaleRevalidateTimeout = base::Seconds(60);
+ 
+ // From http://tools.ietf.org/html/draft-ietf-httpbis-p6-cache-21#section-6
+@@ -2116,6 +2151,11 @@ int HttpCache::Transaction::DoSuccessfulSendRequest() {
+   }
+ 
+   new_response_ = new_response;
++  if (base::FeatureList::IsEnabled(kKuteCacheGameScripts) && method_ == "GET" &&
++      new_response_->headers->response_code() == HTTP_OK &&
++      KuteIsVersionedGameScript(request_->url)) {
++    KuteMakeImmutable(new_response_->headers.get());
++  }
+   if (!ValidatePartialResponse() && !auth_response_.headers.get()) {
+     // Something went wrong with this request and we have to restart it.
+     // If we have an authentication response, we are exposed to weird things
