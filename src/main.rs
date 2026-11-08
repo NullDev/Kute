@@ -59,6 +59,8 @@ pub mod modules {
     pub mod obs;
     #[cfg(target_os = "linux")]
     pub use crate::linux::obs;
+    #[cfg(windows)]
+    pub mod overlays;
     pub mod ping;
     #[cfg(windows)]
     pub mod power;

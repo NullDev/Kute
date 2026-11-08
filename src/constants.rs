@@ -78,6 +78,8 @@ pub const CAT_BLOCKLIST: &[&str] = &[
 // checked against chromium 151.0.7922.174, recheck on a cef bump
 // --disable-stack-profiler: unbranded builds count as local builds, which sample stacks in the browser, gpu and some renderers
 // --disable-gpu-process-for-dx12-info-collection: else chromium starts a second gpu process 120 s in, only for its own statistics
+// --gpu-program-cache-size-kb / --gpu-disk-cache-size-kb: the ANGLE program binary cache, 6 MB by default and full after one session;
+//   a new player's first draw links 2 programs, 120 ms cold against 9 ms with the cache warm (three r186 links on first sight)
 pub const DEFAULT_FLAGS: &str = r#"[
   "--disable-features=NativeNotifications,MediaRouter,CalculateNativeWinOcclusion,HappinessTrackingSurveysForDesktopDemo,HardwareMediaKeyHandling",
   "--disable-backgrounding-occluded-windows",
@@ -113,6 +115,8 @@ pub const DEFAULT_FLAGS: &str = r#"[
   "--disable-in-process-stack-traces",
   "--disable-stack-profiler",
   "--disable-gpu-process-for-dx12-info-collection",
+  "--gpu-program-cache-size-kb=65536",
+  "--gpu-disk-cache-size-kb=65536",
   "--disable-component-update",
   "--autoplay-policy=no-user-gesture-required"
 ]"#;

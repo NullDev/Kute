@@ -100,6 +100,7 @@ wrap_resource_request_handler! {
             if modules::blocklist::is_blocked(&url)
                 && modules::icons::bytes_for(&url).is_none()
                 && !modules::blocklist::wants_empty_model(&url)
+                && !modules::blocklist::wants_silence(&url)
                 && !modules::swapper::has_swap(&url)
             {
                 debug_print!("handlers: blocked {url}");
@@ -131,6 +132,10 @@ wrap_resource_request_handler! {
             if modules::blocklist::wants_empty_model(&url) {
                 debug_print!("handlers: empty model for {url}");
                 return modules::resource::serve("text/plain", modules::blocklist::EMPTY_MODEL.as_bytes().to_vec());
+            }
+            if modules::blocklist::wants_silence(&url) {
+                debug_print!("handlers: silence for {url}");
+                return modules::resource::serve("audio/wav", modules::blocklist::SILENT_WAV.clone());
             }
             let bytes = modules::icons::bytes_for(&url)?;
             debug_print!("handlers: kute icon for {url}");

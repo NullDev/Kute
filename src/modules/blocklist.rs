@@ -66,6 +66,33 @@ pub fn wants_empty_model(url: &str) -> bool {
     utils::krunker_path(url).is_some_and(|path| path.to_ascii_lowercase().ends_with(".obj")) && is_blocked(url)
 }
 
+// a cancelled ambient loop leaves howler with nothing playing, it suspends the AudioContext 30 s later, the game's per frame
+// listener writes then pile up (patch 05 bounds that) and the next sound pays the resume. a silent loop keeps the context running
+pub fn wants_silence(url: &str) -> bool {
+    utils::krunker_path(url).is_some_and(|path| path.starts_with("sound/ambient_")) && is_blocked(url)
+}
+
+// 2 s of 8 kHz mono silence, decodeAudioData sniffs the container so the .mp3 url does not matter
+pub static SILENT_WAV: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    let samples: u32 = 8000 * 2;
+    let data_len = samples * 2;
+    let mut wav = Vec::with_capacity(44 + data_len as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&8000u32.to_le_bytes());
+    wav.extend_from_slice(&16000u32.to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    wav.resize(44 + data_len as usize, 0);
+    wav
+});
+
 fn is_kute_server(url: &str) -> bool {
     url_host(url).is_some_and(|host| host == "kute.lol" || host.ends_with(".kute.lol") || host == API_HOST.as_str())
 }
