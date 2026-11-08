@@ -304,7 +304,7 @@ impl Patch {
     }
 }
 
-pub const PATCHES: [Patch; 8] = [
+pub const PATCHES: [Patch; 9] = [
     Patch {
         setting: "patchFrameLimiter",
         feature: "KuteFrameLimiter",
@@ -351,6 +351,12 @@ pub const PATCHES: [Patch; 8] = [
         setting: "patchHighQoS",
         feature: "KuteHighQoSForeground",
         key: "qos",
+        default: true,
+    },
+    Patch {
+        setting: "patchCacheGameScripts",
+        feature: "KuteCacheGameScripts",
+        key: "scripts",
         default: true,
     },
 ];

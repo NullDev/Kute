@@ -637,6 +637,16 @@
         "needsRestart": true,
         "hostFeature": "cef-patches"
     },
+    "patchCacheGameScripts": {
+        "name": "Cache Game Scripts",
+        "id": "patchCacheGameScripts",
+        "description": "Chromium patch: keeps Krunker's versioned scripts in the cache so a lobby change does not download and parse them again. Off loads them fresh every time",
+        "type": "checkbox",
+        "category": "Engine",
+        "defaultValue": true,
+        "needsRestart": true,
+        "hostFeature": "cef-patches"
+    },
     "patchHighQoS": {
         "name": "Game Process at High QoS",
         "id": "patchHighQoS",
