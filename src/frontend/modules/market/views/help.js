@@ -5,7 +5,7 @@ import { introView } from "./intro.js";
 export function helpView(desk){
     return {
         html:
-            introView(desk, "How it works.", "What the numbers mean.") +
+            introView(desk, "How it works.", "Where every number comes from.") +
             template,
     };
 }

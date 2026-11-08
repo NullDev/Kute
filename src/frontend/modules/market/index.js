@@ -37,7 +37,7 @@ class Market {
                 // a bundle on an exe without the signing message: say so once, load nothing
                 if (!this.warned){
                     this.warned = true;
-                    kute.showNotification("The Kute Market needs a newer Kute. Update Kute to use it.", false, 8);
+                    kute.showNotification("Item Stats need a newer Kute. Update Kute to use them.", false, 8);
                 }
                 this.running = false;
                 return;
@@ -78,7 +78,7 @@ class Market {
         const scope = [...(right.querySelector(".nav-item")?.classList ?? [])].find((name) => name.startsWith("svelte-")) ?? "";
         this.headerItem.className = `nav-item ${scope}`;
         // the inbox's own markup and classes, so the count looks like krunker's mail badge
-        this.headerItem.innerHTML = `<div class="nav-icon-wrap ${scope}"><span class="material-icons nav-mat-icon ${scope}">candlestick_chart</span></div> <span class="nav-label ${scope}">Kute Market</span> <div class="nav-badge ${scope}" style="display: none;"></div>`;
+        this.headerItem.innerHTML = `<div class="nav-icon-wrap ${scope}"><span class="material-icons nav-mat-icon ${scope}">query_stats</span></div> <span class="nav-label ${scope}">Item Stats</span> <div class="nav-badge ${scope}" style="display: none;"></div>`;
         this.headerItem.onclick = () => this.open(alerts.unread.size ? "watchlist" : undefined);
         this.headerSeparator.className = "verticalSeparator";
         this.headerSeparator.style.cssText = "height: 35px;";
@@ -95,10 +95,10 @@ class Market {
     }
 
     /**
-     * opens the terminal, on a tab when asked
+     * opens the window, on a tab when asked
      *
      * @param {string} [tab]
-     * @param {unknown} [arg] the skin for the item tab, the name for the portfolio
+     * @param {unknown} [arg] the skin for the item tab
      */
     async open(tab, arg){
         if (!this.running) return;

@@ -1,32 +1,15 @@
 import { kute } from "../../client.js";
 import marketApi from "./api.js";
-import { GRADE_COLORS, formatKr, formatPercent } from "./types.js";
-import { esc, noEvidence } from "./presentation.js";
+import { formatKr } from "./types.js";
 
-// one line under every market card: our value, the grade and how the ask compares. the game's card
-// shows only a preview image and an ask, the image path names the skin. the menu is polled at a slow
-// rate, never a body wide observer, and nothing runs while the pointer is locked
+// an "Item Stats" button in krunker's item detail header, labeled with the lowest ask and the last sale the
+// collector saw. the menu is polled at a slow rate, never a body wide observer, and nothing runs while the
+// pointer is locked
 
 const POLL_MS = 1500;
 const MARK = "data-kute-market";
-const LINE_CLASS = "kuteMarketLine";
 const STYLE_ID = "kuteMarketCardStyle";
-const CARD_SELECTOR = ".market-card, .market-item-card";
-// the line borrows krunker's estimate badge classes (same font, box and position in the badge stack), so only
-// the grade square and the delta are ours
-const CSS = `
-.market-card,.market-item-card{position:relative}
-.${LINE_CLASS}{display:inline-flex!important;align-items:center;gap:.35em;white-space:nowrap;cursor:pointer;pointer-events:auto}
-.${LINE_CLASS}:hover{filter:brightness(1.25)}
-.${LINE_CLASS}.kuteFloating{position:absolute;left:6px;bottom:6px;z-index:3;background:rgba(0,0,0,.72);color:#fff;padding:2px 7px;border-radius:5px;font-size:12px;font-weight:700}
-.${LINE_CLASS} .kuteMark{color:#f5479b;font-weight:900}
-.${LINE_CLASS} .kuteGrade{display:inline-flex;align-items:center;justify-content:center;min-width:1.4em;height:1.4em;border-radius:3px;padding:0 .25em;color:#111;font-size:.75em;line-height:1}
-.${LINE_CLASS} .kuteDelta{font-size:.85em}
-.${LINE_CLASS} .kuteDelta.kuteDeal{color:#5ce05a}
-.${LINE_CLASS} .kuteDelta.kuteOver{color:#f44336}
-.${LINE_CLASS} .kuteNone{opacity:.6}
-.kuteDetailBtn .kuteMark{color:#f5479b;font-weight:900;margin-right:2px}
-`;
+const CSS = ".kuteDetailBtn .kuteMark{color:#f5479b;font-weight:900;margin-right:2px}";
 const DETAIL_SELECTOR = ".item-detail-container, .items-detail-root";
 const DETAIL_BTN_CLASS = "kuteDetailBtn";
 
@@ -70,8 +53,8 @@ class Cards {
         this.timer = undefined;
         document.removeEventListener("pointerdown", this.onPick, true);
         this.pick = null;
-        for (const line of document.querySelectorAll(`.${LINE_CLASS}, .${DETAIL_BTN_CLASS}`)) line.remove();
-        for (const card of document.querySelectorAll(`[${MARK}]`)) card.removeAttribute(MARK);
+        for (const button of document.querySelectorAll(`.${DETAIL_BTN_CLASS}`)) button.remove();
+        for (const node of document.querySelectorAll(`[${MARK}]`)) node.removeAttribute(MARK);
     }
 
     /**
@@ -83,65 +66,17 @@ class Cards {
         return match ? match[1] : null;
     }
 
-    /**
-     * @param {Element} card
-     * @return {number|null} the ask the card shows, from the first kr figure in it
-     */
-    static askOf(card){
-        // the browse grid prints the ask in .inline-price, other views are searched for the first kr figure
-        const price = card.querySelector(".inline-price");
-        if (price){
-            const value = Number((price.textContent ?? "").replace(/[^\d.]/g, ""));
-            return Number.isFinite(value) && value > 0 ? value : null;
-        }
-        for (const node of card.querySelectorAll("span, div")){
-            if (node.classList.contains(LINE_CLASS) || node.children.length) continue;
-            const text = node.textContent?.trim() ?? "";
-            if (/^~/.test(text)) continue;
-            const match = /^([\d,.]+)\s*KR$/i.exec(text) ?? /^([\d,.]+)$/.exec(text);
-            if (match && node.closest(".estimate-badge") === null){
-                const value = Number(match[1].replace(/,/g, ""));
-                if (Number.isFinite(value) && value > 0) return value;
-            }
-        }
-        return null;
-    }
-
     async tick(){
         if (this.busy || document.pointerLockElement) return;
         const detail = document.querySelector(DETAIL_SELECTOR);
         // the catalog view stays mounted and swaps its item, its label tells them apart
         const label = detail?.getAttribute("aria-label") ?? "1";
-        if (detail && detail.getAttribute(MARK) !== label){
+        if (!detail || detail.getAttribute(MARK) === label) return;
+        this.busy = true;
+        try {
             detail.setAttribute(MARK, label);
             detail.querySelector(`.${DETAIL_BTN_CLASS}`)?.remove();
             await this.detailButton(detail, label);
-        }
-        const cards = [...document.querySelectorAll(CARD_SELECTOR)].filter((card) => !card.hasAttribute(MARK));
-        if (!cards.length) return;
-        this.busy = true;
-        try {
-            /** @type {Map<string, Element[]>} */
-            const byPath = new Map();
-            for (const card of cards){
-                card.setAttribute(MARK, "1");
-                const img = card.querySelector("img");
-                const path = img instanceof HTMLImageElement ? Cards.thumbPath(img.currentSrc || img.src) : null;
-                if (!path) continue;
-                const list = byPath.get(path) ?? [];
-                list.push(card);
-                byPath.set(path, list);
-            }
-            if (!byPath.size) return;
-            const values = await marketApi.valuesByThumbnails([...byPath.keys()]);
-            for (const [path, list] of byPath){
-                const value = values[path];
-                for (const card of list){
-                    // the card may have been re-rendered while we waited
-                    if (!card.isConnected) continue;
-                    this.draw(card, value ?? null);
-                }
-            }
         }
         finally {
             this.busy = false;
@@ -153,9 +88,9 @@ class Cards {
      *
      * @param {Element} detail
      * @param {string} label the view's item name
-     * @return {Promise<import("./types.js").SkinValue|null>}
+     * @return {Promise<import("./types.js").SkinFacts|null>}
      */
-    async detailValue(detail, label){
+    async detailFacts(detail, label){
         const { pick } = this;
         if (pick && Date.now() - pick.at < PICK_MS && (!pick.name || pick.name === label)){
             const values = await marketApi.values([pick.skin]);
@@ -171,16 +106,13 @@ class Cards {
             if (values[path]) return values[path];
         }
         if (!label || label === "1") return null;
-        /** @type {import("./types.js").SearchReply|null} */
-        const reply = await marketApi.cached(`/market/search?q=${encodeURIComponent(label)}&sort=volume&page=1`, 60_000);
+        const reply = await marketApi.search(label);
         // names repeat across skins (several Cherry Blossoms), only a unique exact match is safe
         const exact = reply?.items.filter((item) => item.name.toLowerCase() === label.toLowerCase()) ?? [];
         return exact.length === 1 ? exact[0] : null;
     }
 
     /**
-     * a "Kute Market" button in krunker's item detail header, styled like its own header buttons
-     *
      * @param {Element} detail
      * @param {string} label
      */
@@ -193,62 +125,27 @@ class Cards {
         const sibling = actions.querySelector("button");
         button.className = `${sibling?.className ?? ""} ${DETAIL_BTN_CLASS}`.trim();
         const icon = sibling?.querySelector("i")?.className ?? "material-icons";
-        button.innerHTML = `<i class="${icon}">candlestick_chart</i> <span>Kute Market</span>`;
-        button.title = "K value, liquidity, price history, depth and owners in Kute Market";
+        button.innerHTML = `<i class="${icon}">query_stats</i> <span>Item Stats</span>`;
+        button.title = "Last sales, asking prices and supply Kute has on file for this item";
         actions.append(button);
-        const value = await this.detailValue(detail, label);
+        const facts = await this.detailFacts(detail, label);
         // the view may have switched items while we waited
-        if (!value || detail.getAttribute(MARK) !== label){
+        if (!facts || detail.getAttribute(MARK) !== label){
             button.remove();
             return;
         }
         const text = button.querySelector("span");
-        if (text) text.textContent = noEvidence(value) ? "Kute Market · no price data" : `Kute Market · K ${formatKr(value.fair)} ${value.grade}`;
+        if (text){
+            const parts = [];
+            if (facts.lastSoldPrice !== null) parts.push(`sold ${formatKr(facts.lastSoldPrice)}`);
+            else if (facts.lastSaleAvg !== null) parts.push(`avg ${formatKr(facts.lastSaleAvg)}`);
+            if (facts.lowest !== null) parts.push(`ask ${formatKr(facts.lowest)}`);
+            text.textContent = parts.length ? `Item Stats · ${parts.join(" · ")}` : "Item Stats · nothing seen yet";
+        }
         button.addEventListener("click", (event) => {
             event.stopPropagation();
-            kute.market?.open("item", value.skin);
+            kute.market?.open("item", facts.skin);
         });
-    }
-
-    /**
-     * @param {Element} card
-     * @param {import("./types.js").SkinValue|null} value
-     */
-    draw(card, value){
-        card.querySelector(`.${LINE_CLASS}`)?.remove();
-        if (!value) return;
-        const line = document.createElement("div");
-        const estimate = card.querySelector(".estimate-badge");
-        line.className = estimate ? `${estimate.className} ${LINE_CLASS}` : `${LINE_CLASS} kuteFloating`;
-        const ask = Cards.askOf(card);
-        if (noEvidence(value)){
-            line.innerHTML = '<span class="kuteMark">K</span> <span class="kuteNone">no data</span>';
-            line.title = `Kute has no price evidence for this item: no sale, trade or listing it could see. ${value.method === "floor" ? "The game's quick-sell floor" : "Krunker's estimate"} is ${formatKr(value.fair)} kr, and such items are often worth far more. Click for the item in Kute Market`;
-        }
-        else {
-            let delta = "";
-            if (ask !== null && value.fair > 0){
-                const share = ask / value.fair - 1;
-                let cls = "";
-                if (share <= -0.1 && value.confidence >= 40) cls = "kuteDeal";
-                else if (share >= 0.25) cls = "kuteOver";
-                const percent = Math.round(Math.abs(share) * 100);
-                delta = `<span class="kuteDelta ${cls}">${share < 0 ? "−" : "+"}${percent}%</span>`;
-            }
-            line.innerHTML = `<span class="kuteMark">K</span> ${formatKr(value.fair)}<span class="kuteGrade" style="background:${GRADE_COLORS[value.grade]}">${esc(value.grade)}</span>${delta}`;
-            line.title = `Kute fair value ${formatKr(value.fair)} kr, evidence score ${value.confidence}/100, public-market activity grade ${value.grade}`
-                + (value.privateTrading?.trades7d ? `, ${value.privateTrading.trades7d} reported private trades this week` : "")
-                + (value.exchange?.status === "applied" ? ", includes private exchange evidence" : "")
-                + (ask !== null ? `, this ask ${formatPercent(ask / value.fair - 1)} against it` : "") + ". Click for the item in Kute Market";
-        }
-        line.addEventListener("click", (event) => {
-            // the card itself opens krunker's detail view on click
-            event.stopPropagation();
-            event.preventDefault();
-            kute.market?.open("item", value.skin);
-        });
-        if (estimate) estimate.after(line);
-        else card.append(line);
     }
 }
 

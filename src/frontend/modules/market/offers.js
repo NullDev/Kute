@@ -1,18 +1,20 @@
 import marketApi from "./api.js";
-import { formatKr, formatPercent } from "./types.js";
-import { esc, TRADE_VERDICTS, tradeBreakdown, tradeNotes, verdictOf } from "./presentation.js";
+import { formatKr } from "./types.js";
+import { esc } from "./presentation.js";
+import { CHANGED_EVENT, setOwnPrice } from "./prices.js";
+import { breakdownHtml, resolveEntries, sideOf } from "./tradeFacts.js";
 import template from "../../components/marketOffer.html";
 
 const POLL_MS = 1200;
-// /market/analyze allows 20 a minute per session and the trade window shares that budget
-const SPACING_MS = 3500;
+/** facts are cached for five minutes by the api module, a redraw is free; lookups stay spaced */
+const SPACING_MS = 2000;
 const REFRESH_MS = 10 * 60 * 1000;
 const KEEP = 200;
 
 /**
- * @typedef {import("./types.js").TradeItem & {path?:string}} Entry
- * @typedef {{give:Entry[],get:Entry[],giveKr:number,getKr:number,unvalued:string[],open:boolean[],key:string}} Offer
- * @typedef {{verdict:import("./types.js").TradeVerdict|null,message:string,at:number}} Result
+ * @typedef {import("./tradeFacts.js").Entry} Entry
+ * @typedef {{give:Entry[],get:Entry[],giveKr:number,getKr:number,unvalued:string[],key:string}} Offer
+ * @typedef {{give:Entry[]|null,get:Entry[]|null,facts:Record<string, import("./types.js").SkinFacts>,message:string,at:number}} Result
  */
 
 class TradeOffers {
@@ -24,23 +26,35 @@ class TradeOffers {
         this.failures = 0;
         this.waiting = "";
         this.generation = 0;
+        this.revision = 0;
         /** @type {Map<string, Result>} */
         this.results = new Map();
         /** @type {WeakMap<Element, HTMLDivElement>} */
         this.boxes = new WeakMap();
         /** @type {WeakMap<HTMLDivElement, string>} */
         this.shown = new WeakMap();
+        this.onPrices = () => {
+            this.revision++;
+        };
+        this.onChange = (/** @type {Event} */ event) => {
+            const input = event.target;
+            if (!(input instanceof HTMLInputElement) || !input.dataset.ownSkin) return;
+            const value = Number(input.value);
+            setOwnPrice({ skin: Number(input.dataset.ownSkin), name: input.dataset.ownName ?? "" }, value > 0 ? value : null);
+        };
     }
 
     start(){
         if (this.timer !== undefined) return;
         this.timer = window.setInterval(() => this.tick(), POLL_MS);
+        window.addEventListener(CHANGED_EVENT, this.onPrices);
     }
 
     stop(){
         clearInterval(this.timer);
         this.timer = undefined;
         this.generation++;
+        window.removeEventListener(CHANGED_EVENT, this.onPrices);
         for (const box of document.querySelectorAll(".kuteOfferBox")) box.remove();
         this.boxes = new WeakMap();
     }
@@ -56,8 +70,6 @@ class TradeOffers {
         if (contents.length !== 2) return null;
         /** @type {Set<string>} */
         const unvalued = new Set();
-        /** @type {boolean[]} */
-        const open = [];
         /** @param {Element} content */
         const side = (content) => {
             const items = [...content.querySelectorAll(".trade-item:not(.trade-item-empty)")].map((node) => {
@@ -73,23 +85,18 @@ class TradeOffers {
                 return entry;
             });
             let kr = 0;
-            let other = false;
             // "+1,234 KR" from toLocaleString, so the separator follows the player's locale
             for (const node of content.querySelectorAll(".trade-currency-item")){
                 const match = /^\+?\s*(.*?)\s*([A-Za-z]+)$/.exec(node.textContent?.trim() ?? "");
                 const digits = match?.[1].replace(/\D/g, "") ?? "";
                 if (match?.[2] === "KR" && digits) kr += Number(digits);
-                else {
-                    unvalued.add(match?.[2] ?? "?");
-                    other = true;
-                }
+                else unvalued.add(match?.[2] ?? "?");
             }
-            open.push(other);
             return { items, kr };
         };
         const give = side(contents[0]);
         const get = side(contents[1]);
-        const offer = { give: give.items, get: get.items, giveKr: give.kr, getKr: get.kr, unvalued: [...unvalued].sort(), open };
+        const offer = { give: give.items, get: get.items, giveKr: give.kr, getKr: get.kr, unvalued: [...unvalued].sort() };
         return { ...offer, key: JSON.stringify(offer) };
     }
 
@@ -100,7 +107,9 @@ class TradeOffers {
             box = document.createElement("div");
             box.className = "kuteOfferBox";
             box.style.cssText = "all:initial;display:block;box-sizing:border-box;width:100%;min-width:0;";
-            box.attachShadow({ mode: "open" }).innerHTML = template;
+            const shadow = box.attachShadow({ mode: "open" });
+            shadow.innerHTML = template;
+            shadow.addEventListener("change", this.onChange);
             // svelte inserts before its own anchors, so the end of the holder stays ours
             holder.append(box);
             this.boxes.set(holder, box);
@@ -121,8 +130,8 @@ class TradeOffers {
             if (!offer) continue;
             const result = this.results.get(offer.key) ?? null;
             const box = this.box(holder);
-            const waiting = this.waiting && now < this.nextAt ? this.waiting : "Updating estimates...";
-            const state = `${offer.key}|${result?.at ?? waiting}`;
+            const waiting = this.waiting && now < this.nextAt ? this.waiting : "Looking up the items...";
+            const state = `${offer.key}|${result?.at ?? waiting}|${this.revision}`;
             if (this.shown.get(box) !== state){
                 this.shown.set(box, state);
                 TradeOffers.render(box, offer, result, waiting);
@@ -131,11 +140,11 @@ class TradeOffers {
             const rect = holder.getBoundingClientRect();
             if (rect.bottom > 0 && rect.top < window.innerHeight) pending = offer;
         }
-        if (pending && !this.busy && now >= this.nextAt) this.analyze(pending);
+        if (pending && !this.busy && now >= this.nextAt) this.lookup(pending);
     }
 
     /** @param {Offer} offer */
-    async analyze(offer){
+    async lookup(offer){
         this.busy = true;
         const {generation} = this;
         try {
@@ -153,26 +162,22 @@ class TradeOffers {
 
     /** @param {Offer} offer @return {Promise<Result|null>} */
     async evaluate(offer){
-        if (!offer.give.length && !offer.get.length && !offer.giveKr && !offer.getKr) return { verdict: null, message: "This offer has nothing to compare.", at: Date.now() };
-        const paths = [...offer.give, ...offer.get].filter((item) => item.skin < 0 && item.path).map((item) => /** @type {string} */ (item.path));
-        const values = paths.length ? await marketApi.valuesByThumbnails(paths) : {};
-        /** @param {Entry[]} items */
-        const resolve = (items) => items.map(({ path, ...item }) => ({ ...item, skin: item.skin < 0 ? values[path ?? ""]?.skin ?? -1 : item.skin }));
-        const give = resolve(offer.give);
-        const get = resolve(offer.get);
-        if ([...give, ...get].some((item) => item.skin < 0)) return { verdict: null, message: "An item could not be identified. A complete comparison is unavailable.", at: Date.now() };
+        if (!offer.give.length && !offer.get.length && !offer.giveKr && !offer.getKr) return { give: null, get: null, facts: {}, message: "This offer has nothing in it.", at: Date.now() };
         this.nextAt = Date.now() + SPACING_MS;
-        const reply = await marketApi.analyzeStatus({ give, get, giveKr: offer.giveKr, getKr: offer.getKr });
-        if (reply.data){
+        const lookup = (/** @type {string[]} */ paths) => marketApi.valuesByThumbnails(paths);
+        const give = await resolveEntries(offer.give, lookup);
+        const get = await resolveEntries(offer.get, lookup);
+        if (!give || !get) return { give: null, get: null, facts: {}, message: "An item could not be identified.", at: Date.now() };
+        const skins = [...give, ...get].map((e) => e.skin);
+        const facts = skins.length ? await marketApi.values(skins) : {};
+        if (!skins.length || Object.keys(facts).length){
             this.failures = 0;
             this.waiting = "";
-            return { verdict: reply.data, message: "", at: Date.now() };
+            return { give, get, facts, message: "", at: Date.now() };
         }
         this.failures++;
-        this.nextAt = reply.status === 429 ? reply.retryAt ?? Date.now() + 60_000 : Date.now() + Math.min(60_000, 5000 * 2 ** (this.failures - 1));
-        this.waiting = reply.status === 429
-            ? `Request limit reached. Estimates resume after ${new Date(this.nextAt).toLocaleTimeString()}.`
-            : "Estimates unavailable. Retrying with a longer delay.";
+        this.nextAt = marketApi.retryAt > Date.now() ? marketApi.retryAt : Date.now() + Math.min(60_000, 5000 * 2 ** (this.failures - 1));
+        this.waiting = marketApi.lastError || "Item stats unavailable. Retrying with a longer delay.";
         return null;
     }
 
@@ -181,24 +186,22 @@ class TradeOffers {
         const panel = box.shadowRoot?.querySelector(".panel");
         if (!panel) return;
         const open = panel.querySelector("details")?.open ?? false;
-        const verdict = result?.verdict;
-        if (!verdict){
+        if (!result || !result.give || !result.get){
             panel.innerHTML = `<div class="row"><span class="brand">Kute</span><span class="empty" role="status">${esc(result?.message || waiting)}</span></div>`;
             return;
         }
-        const oneSided = (!offer.give.length && !offer.giveKr) || (!offer.get.length && !offer.getKr);
-        const partial = offer.unvalued.length > 0 || [...verdict.give.items, ...verdict.get.items].some((item) => item.unknown);
-        const kind = verdictOf(verdict.verdict);
-        let callout = TRADE_VERDICTS[kind].label;
-        if (partial) callout = "Incomplete comparison";
-        if (oneSided) callout = "One-sided offer";
-        const tone = oneSided || partial ? "" : kind;
-        /** @param {import("./types.js").TradeSide} side @param {boolean} more */
-        const total = (side, more) => `<b>${formatKr(side.value)}${more || side.items.some((item) => item.unknown) ? "+" : ""}</b> KR`;
-        const difference = oneSided || partial ? "" : `<span class="diff ${tone}">${verdict.difference > 0 ? "+" : ""}${formatKr(verdict.difference)} KR <small>${esc(formatPercent(verdict.differenceShare))} of the larger side</small></span>`;
-        const notes = offer.unvalued.length ? [`${offer.unvalued.join(", ")} in this offer ${offer.unvalued.length === 1 ? "has" : "have"} no market estimate`] : [];
-        panel.innerHTML = `<div class="row"><span class="brand">Kute</span><span class="verdict ${tone}" role="status">${callout}</span><span class="sides">You give ${total(verdict.give, offer.open[0])} &middot; You receive ${total(verdict.get, offer.open[1])}</span>${difference}</div>`
-            + `<details${open ? " open" : ""}><summary><span class="show">Item breakdown &amp; evidence</span><span class="hide">Hide item breakdown &amp; evidence</span></summary><div class="breakdown">${tradeBreakdown(verdict.give, "You give")}${tradeBreakdown(verdict.get, "You receive")}</div>${tradeNotes(verdict, notes)}</details>`;
+        const give = sideOf(result.give, offer.giveKr, result.facts);
+        const get = sideOf(result.get, offer.getKr, result.facts);
+        /** @param {import("./tradeFacts.js").Side} side */
+        const total = (side) => side.total === null ? `<b>–</b> <small>${side.priced}/${side.lines.length} priced</small>` : `<b>${formatKr(side.total)}</b> KR`;
+        let difference = "";
+        if (give.total !== null && get.total !== null && (give.lines.length || give.kr) && (get.lines.length || get.kr)){
+            const d = get.total - give.total;
+            difference = `<span class="diff">${d > 0 ? "+" : ""}${formatKr(d)} KR <small>by your prices</small></span>`;
+        }
+        const note = offer.unvalued.length ? `<small class="meta">${esc(offer.unvalued.join(", "))} in this offer ${offer.unvalued.length === 1 ? "is" : "are"} not KR</small>` : "";
+        panel.innerHTML = `<div class="row"><span class="brand">Kute</span><span class="sides">You give ${total(give)} &middot; You receive ${total(get)}</span>${difference}${note}</div>`
+            + `<details${open ? " open" : ""}><summary><span class="show">Items, facts &amp; your prices</span><span class="hide">Hide items</span></summary><div class="breakdown">${breakdownHtml(give, "You give")}${breakdownHtml(get, "You receive")}</div></details>`;
     }
 }
 

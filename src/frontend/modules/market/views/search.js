@@ -7,17 +7,8 @@ const MINUTE = 60_000;
 /** @param {import("../terminal.js").Terminal} desk  @return {Promise<import("../terminal.js").View>} */
 export async function searchView(desk){
     const state = desk.searchState();
-    const params = new URLSearchParams({
-        sort: state.sort,
-        page: String(state.page),
-    });
-    for (const [key, value] of Object.entries({
-        q: state.q,
-        rarity: state.rarity,
-        type: state.type,
-        budget: state.budget,
-        [desk.tab === "active" ? "min_activity" : "min_sales"]: state.minSales,
-    })){
+    const params = new URLSearchParams({ sort: state.sort, page: String(state.page) });
+    for (const [key, value] of Object.entries({ q: state.q, rarity: state.rarity, type: state.type, budget: state.budget, min_sales: state.minSales })){
         if (value !== "") params.set(key, value);
     }
     /** @type {import("../types.js").SearchReply|null} */
@@ -34,12 +25,11 @@ export async function searchView(desk){
     const pages = Math.max(1, Math.ceil(result.total / result.perPage));
     return {
         asOf: result.asOf,
+        asOfLabel: "Facts updated",
         html:
             desk.intro(
-                desk.tab === "active" ? "Find items that are trading." : "Find your next item.",
-                desk.tab === "active"
-                    ? `At least ${state.minSales} public sales or reported private exchanges in seven days. Private activity is shown separately from cash-sale liquidity.`
-                    : "Browse by budget, recent activity, or the items you already have in mind.",
+                "What has an item really sold for?",
+                "Last sales, asking prices and Krunker's sale counts for every tradable item.",
                 '<button class="button small" data-action="reset-search">Reset filters</button>',
             ) +
             html`
@@ -57,36 +47,27 @@ export async function searchView(desk){
                         <option value="">All types</option>
                         ${options(TYPE_NAMES, state.type)}
                     </select>
-                    ${desk.advanced
-                        ? html`
-                              <select id="kmRarity" aria-label="Rarity">
-                                  <option value="">All rarities</option>
-                                  ${options(
-                                      RARITIES.map((r) => r.name),
-                                      state.rarity,
-                                  )}
-                              </select>
-                          `
-                        : html`
-                              <input type="hidden" id="kmRarity" value="${esc(state.rarity)}" />
-                          `}
-                    <select id="kmSales" aria-label="Minimum activity">
-                        ${desk.tab === "active" ? "" : '<option value="">Any activity</option>'}${[1, 5, 20]
+                    <select id="kmRarity" aria-label="Rarity">
+                        <option value="">All rarities</option>
+                        ${options(
+                            RARITIES.map((r) => r.name),
+                            state.rarity,
+                        )}
+                    </select>
+                    <select id="kmSales" aria-label="Minimum sales">
+                        <option value="">Any sales</option>
+                        ${[1, 10, 50]
                             .map(
                                 (n) => html`
-                                    <option value="${n}" ${String(n) === state.minSales ? "selected" : ""}>
-                                        ${n}+ ${desk.tab === "active" ? "sales or trades" : "sales"} / 7D
-                                    </option>
+                                    <option value="${n}" ${String(n) === state.minSales ? "selected" : ""}>${n}+ sold / 30D</option>
                                 `,
                             )
                             .join("")}
                     </select>
                     <select id="kmSort" aria-label="Sort items">
                         ${[
-                            ["volume", "Most traded"],
-                            ["value", "Highest value"],
-                            ["trend7d", "7D gainers"],
-                            ["liquidity", "Most active"],
+                            ["sales", "Most sold"],
+                            ["lowest", "Cheapest ask"],
                             ["name", "Name"],
                         ]
                             .map(

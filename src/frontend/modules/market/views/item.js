@@ -1,170 +1,50 @@
 import { html } from "../element.js";
 import marketApi from "../api.js";
 import { TITLES } from "../navigation.js";
-import { RARITIES, formatAge } from "../types.js";
-import { TYPE_NAMES, esc, money, change, evidenceLabel, activityLabel, empty, stat, fairValue, noEvidence } from "../presentation.js";
+import { RARITIES, formatAge, formatWhen } from "../types.js";
+import { TYPE_NAMES, esc, money, empty, stat } from "../presentation.js";
 import { readWatchlist } from "../watchlist.js";
-import { itemDesk } from "../analytics.js";
-import { itemIntelligence } from "../intelligence.js";
-import { contributionEvidence } from "../contributionEvidence.js";
-import { exchangeEvidence } from "../exchangeEvidence.js";
-import { candleSeries } from "../chartData.js";
-const RANGES = ["1D", "7D", "1M", "3M", "1Y", "ALL"];
-
-/**
- * @param {import("../types.js").SkinSummary} s
- * @param {import("../types.js").RarityContext|undefined} context
- */
-function unpricedNotice(s, context){
-    const rarity = RARITIES[s.rarity]?.name ?? "items";
-    const lines = [`Nobody has sold, traded or listed this item where Kute could see it, so ${s.method === "floor" ? "the number above is only what the game pays on quick sell" : "the number above is Krunker's own estimate"}. It can be worth far more.`];
-    if (context && context.pricedItems >= 5 && context.low !== null && context.high !== null){
-        lines.push(`For reference, ${rarity} items with recent sales mostly went for ${money(context.low)} to ${money(context.high)} KR (middle half of ${context.pricedItems} items). Rare items of the same rarity can be worth many times that.`);
-    }
-    if (context && context.krunkerItems >= 5 && context.krunkerRatio !== null){
-        const off = Math.abs(context.krunkerRatio - 1) < 0.1 ? "close to their real sale prices" : `${context.krunkerRatio < 1 ? "above" : "below"} their real sale prices (ratio ${context.krunkerRatio})`;
-        lines.push(`Where ${rarity} items do sell, Krunker's estimate sits ${off}, but it is missing for most items without sales.`);
-    }
-    return `<div class="notice">${lines.map(esc).join("<br>")}</div>`;
-}
+import { ownPrice } from "../prices.js";
+const RANGES = ["7D", "1M", "3M", "1Y", "ALL"];
 
 /** @param {import("../terminal.js").Terminal} desk  @return {Promise<import("../terminal.js").View>} */
 export async function itemView(desk){
     const state = desk.itemState();
-    let historyRange = !state.candles && state.range === "7D" ? "1M" : state.range;
-    /** @type {{item:import("../types.js").ItemPage,history:import("../types.js").HistoryReply|null,listings:import("../types.js").ListingsReply|null}|null} */
-    let reply = await marketApi.itemDesk(state.skin, historyRange);
-    // no sale this week: the week's sampled asks instead of an empty chart
-    if (historyRange !== state.range && reply?.history && !reply.history.points.some((p) => p.t >= Date.now() - 7 * 86_400_000 && p.avg !== null)){
-        historyRange = state.range;
-        reply = await marketApi.itemDesk(state.skin, historyRange) ?? reply;
-    }
+    const reply = await marketApi.itemDesk(state.skin, state.range);
     const { item: page, history, listings } = reply ?? {};
     if (!page) return desk.unavailable();
     const s = page.skin;
-    const e = page.evidence;
     const watched = readWatchlist().some((w) => w.skin === s.skin);
-    const range = e?.dailyRange;
-    const salesDetail = e ? `${e.sales} sales across ${e.days} trading days in 30D` : `${page.liquidity.sales30d} sales in 30 days`;
-    const recent =
-        s.exchange?.status === "applied"
-            ? `${s.exchange.reports} eligible private exchanges${s.method.startsWith("sales") ? " + public sales" : "; tentative when sparse"}`
-            : salesDetail;
-    const reasons = e?.reasons ?? [
-        recent,
-        `The estimate is based on ${s.method.startsWith("sales") ? "historical sales aggregates" : "limited market evidence"}.`,
-    ];
-    const series = [
-        {
-            label: history?.resolution === "hour" ? "Lowest observed ask" : "Daily average sale",
-            color: "#f580b4",
-        },
-    ];
-    if (state.overlay !== "none"){
-        series.push({
-            label:
-                {
-                    fair: "Kute estimate",
-                    lowest: "Lowest observed ask",
-                    krunker: "Krunker estimate",
-                }[state.overlay] ?? "Comparison",
-            color: "#87b8f7",
-        });
-    }
+    const own = ownPrice(s.skin);
+    const hourly = history?.resolution === "hour";
+    const series = hourly
+        ? [{ label: "Lowest ask (sampled)", color: "#87b8f7" }]
+        : [{ label: "Daily average sale (Krunker)", color: "#f580b4" }, { label: "Lowest ask (sampled)", color: "#87b8f7" }];
     /** @type {import("../chart.js").ChartPoint[]} */
-    let points = (history?.points ?? [])
-        .filter((p) => historyRange === state.range || p.t >= Date.now() - 7 * 86_400_000)
-        .map((p) => ({
-            t: p.t,
-            values: [
-                history?.resolution === "hour" ? p.lowest : p.avg,
-                ...(series.length > 1
-                    ? [
-                        {
-                            fair: p.fair,
-                            lowest: p.lowest,
-                            krunker: p.krunker,
-                        }[state.overlay] ?? null,
-                    ]
-                    : []),
-            ],
-            volume: history?.resolution === "day" && p.salesObserved !== false ? p.sales : null,
-            ask: p.ask,
-        }));
-    let stepMs = history?.resolution === "hour" ? 3_600_000 : 86_400_000;
-    const candles = state.candles ? candleSeries(points, stepMs) : null;
-    if (candles){
-        ({ points, stepMs } = candles);
-    }
-    let chartNote =
-        "Daily average completed-sale prices. Today's point, when present, is incomplete. Dashed connections cross missing observations; they do not supply prices for those dates.";
-    if (history?.resolution === "hour"){
-        chartNote =
-            "Intraday lines show sampled asks. Dashed connections cross unsampled periods. Official sales data is daily; individual transaction timing is unavailable.";
-    }
-    if (candles){
-        chartNote = `Auto interval: ${candles.label}. Sparse quotes use larger intervals when they can support multiple candles. Green and red show rising and falling sampled asks; gray ticks show one quote or an unchanged close. Empty intervals remain empty. These are asking-price candles, not transaction candles.`;
-    }
-    const visiblePoints = Math.max(8, Math.ceil(points.length / state.zoom));
-    const panStep = Math.max(1, Math.floor(visiblePoints / 2));
-    const listingRows = (listings?.listings ?? []).slice(0, desk.advanced ? 250 : 5);
-    const bookAt = listings?.observedAt ?? e?.bookAt;
+    const points = (history?.points ?? []).map((p) => ({
+        t: p.t,
+        values: hourly ? [p.lowest] : [p.avg, p.lowest],
+        volume: hourly ? null : p.sales,
+    }));
+    const bookAt = listings?.observedAt ?? s.bookAt;
     const stale = !bookAt || Date.now() - bookAt > 3 * 3_600_000;
-    const highestAsk = listings?.highest;
-    let highestValue = "Unavailable";
-    let highestNote = "No available quote";
-    if (highestAsk === null) highestValue = "None observed";
-    else if (highestAsk !== undefined){
-        highestValue = html`
-            ${money(highestAsk)}
-            <span class="unit">KR</span>
-        `;
-        highestNote = `Sampled ask, not a sale price${stale ? " &middot; quote needs updating" : ""}`;
-    }
-    const premiumTable = (/** @type {import("../types.js").InstanceBracket[]} */ brackets) => html`
-        <div class="tableWrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Attribute</th>
-                        <th class="num">Observed instances</th>
-                        <th>Premium</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${brackets
-                        .map(
-                            (b) => html`
-                                <tr>
-                                    <td>${esc(b.label)}</td>
-                                    <td class="num">${b.count}</td>
-                                    <td>${b.premium === null ? "Not established" : change(b.premium)}</td>
-                                </tr>
-                            `,
-                        )
-                        .join("")}
-                </tbody>
-            </table>
-        </div>
-    `;
+    const listingRows = (listings?.listings ?? []).slice(0, 50);
+    const since = page.historySince ? `since ${formatWhen(page.historySince)}` : "";
+    const lastSale = s.lastSoldPrice !== null && s.lastSoldAt !== null
+        ? stat("Last confirmed sale", html`${money(s.lastSoldPrice)}<span class="unit"> KR</span>`, `${esc(formatWhen(s.lastSoldAt))} UTC &middot; ${s.sold30d} confirmed in 30 days`)
+        : stat("Last confirmed sale", '<span class="muted">None seen</span>', s.lastSaleDay ? `Krunker's average on ${esc(formatWhen(s.lastSaleDay))}: ${money(s.lastSaleAvg)} KR` : "No sale while Kute watched");
     return {
         item: page,
         listings,
-        asOf: s.valuedAt ?? page.asOf,
+        asOf: page.asOf,
+        asOfLabel: "Facts updated",
         points: history ? points : undefined,
         series,
-        chartOptions: {
-            candles: state.candles,
-            volume: history?.resolution === "day",
-            zoom: state.zoom,
-            stepMs,
-            connectGaps: true,
-            offset: state.offset,
-        },
+        chartOptions: { volume: !hourly, stepMs: hourly ? 3_600_000 : 86_400_000 },
         html:
             html`
                 <button class="textButton" data-action="back">
-                    &#8592; Back to ${esc(TITLES[/** @type {keyof typeof TITLES} */ (desk.previous)] ?? "Discover")}
+                    &#8592; Back to ${esc(TITLES[/** @type {keyof typeof TITLES} */ (desk.previous)] ?? "Search")}
                 </button>
                 <div class="itemHero">
                     <div class="itemArt">
@@ -177,16 +57,19 @@ export async function itemView(desk){
                     <div>
                         <div class="eyebrow">
                             ${esc(RARITIES[s.rarity]?.name)} &middot;
-                            ${esc(TYPE_NAMES[s.type])}${s.season ? ` &middot; Season ${s.season}` : ""}
+                            ${esc(TYPE_NAMES[s.type])}${s.season ? ` &middot; Season ${s.season}` : ""}${s.tradable ? "" : " &middot; Not tradable"}
                         </div>
                         <h1>${esc(s.name)}</h1>
                         <p class="sub">
-                            ${esc(activityLabel(s))}
-                            <span class="muted">&middot;</span>
-                            ${esc(evidenceLabel(s))}
+                            ${money(s.inC)} in circulation &middot; ${s.onS} listed by Krunker's count
+                            ${s.krunker !== null ? ` &middot; Krunker's estimate ${money(s.krunker)} KR` : " &middot; Krunker has no estimate"}
                         </p>
                     </div>
                     <div class="itemActions">
+                        <label class="field ownField">
+                            Your price / KR
+                            <input id="kmOwnPrice" type="number" min="1" placeholder="Set yours" value="${own ?? ""}" data-own-skin="${s.skin}" data-own-name="${esc(s.name)}" />
+                        </label>
                         <button class="button ${watched ? "" : "primary"}" data-action="watch">
                             ${watched ? "Watching" : "+ Watch item"}
                         </button>
@@ -196,32 +79,27 @@ export async function itemView(desk){
             html`
                 <div class="metrics itemMetrics">
                     ${stat(
-                        "Kute estimate",
-                        fairValue(s, '<span class="unit"> KR</span>'),
-                        esc(recent),
+                        "Lowest ask",
+                        s.lowest === null ? '<span class="muted">Not listed</span>' : html`${money(s.lowest)}<span class="unit"> KR</span>`,
+                        s.lowest === null ? "No live listing in the last book read" : `${s.listed} listed${s.highest !== null && s.highest !== s.lowest ? ` &middot; highest ${money(s.highest)}` : ""}${bookAt ? ` &middot; read ${esc(formatAge(Date.now() - bookAt))} ago` : ""}`,
+                    )}${lastSale}${stat(
+                        "Sold in 30 days",
+                        String(s.sales30d),
+                        s.avg30d !== null ? `Krunker's average ${money(s.avg30d)} KR &middot; ${s.sales90d} in 90 days` : "Krunker's daily counts",
                     )}${stat(
-                        "Lowest observed ask",
-                        s.lowest === null
-                            ? "None listed"
-                            : html`
-                                  ${money(s.lowest)}
-                                  <span class="unit">KR</span>
-                              `,
-                        s.spread !== null
-                            ? change(s.spread) + ` vs estimate${stale ? " &middot; quote needs updating" : ""}`
-                            : "No available quote",
-                    )}${stat("Highest observed ask", highestValue, highestNote)}${stat(
-                        "Sales in the last 7 days",
-                        String(s.sales7d),
-                        `${s.onS} currently listed &middot; ${money(s.inC)} in circulation`,
+                        "Krunker's estimate",
+                        s.krunker === null ? '<span class="muted">None</span>' : html`${money(s.krunker)}<span class="unit"> KR</span>`,
+                        s.floor > 0 ? `Quick sell pays ${money(s.floor)} KR` : "Not eligible for quick sell",
                     )}
                 </div>
-                ${noEvidence(s) ? unpricedNotice(s, page.rarityContext) : ""}
             ` +
             html`
                 <section class="sectionGap panel">
                     <div class="panelHead">
-                        <h3>Price history</h3>
+                        <div>
+                            <h3>Price history</h3>
+                            <p class="sub">Krunker's daily average sale price and the lowest ask Kute sampled${since ? `, ${since}` : ""}. Bars are Krunker's sales per day.</p>
+                        </div>
                         <div class="segmented">
                             ${RANGES.map(
                                 (r) => html`
@@ -230,222 +108,118 @@ export async function itemView(desk){
                             ).join("")}
                         </div>
                     </div>
-                    <div class="controlsGap row">
-                        <div class="segmented">
-                            <button data-chart-mode="line" class="${!state.candles ? "on" : ""}">Line</button>
-                            <button data-chart-mode="candles" class="${state.candles ? "on" : ""}">Ask candles</button>
-                        </div>
-                        <label class="field">
-                            <span class="srOnly">Chart comparison</span>
-                            <select id="kmOverlay">
-                                ${[
-                                    ["none", "No comparison"],
-                                    ["fair", "Kute estimate"],
-                                    ["lowest", "Lowest ask"],
-                                    ["krunker", "Krunker estimate"],
-                                ]
-                                    .map(
-                                        ([v, n]) => html`
-                                            <option value="${v}" ${state.overlay === v ? "selected" : ""}>${n}</option>
-                                        `,
-                                    )
-                                    .join("")}
-                            </select>
-                        </label>
-                        <span class="spacer"></span>
-                        <button class="button small" data-zoom="${Math.min(8, state.zoom * 2)}" ${state.zoom >= 8 ? "disabled" : ""}>
-                            Zoom in
-                        </button>
-                        <button
-                            class="button small"
-                            data-pan="${Math.min(Math.max(0, points.length - visiblePoints), state.offset + panStep)}"
-                            ${state.offset + visiblePoints >= points.length ? "disabled" : ""}
-                        >
-                            Older
-                        </button>
-                        <button class="button small" data-pan="${Math.max(0, state.offset - panStep)}" ${!state.offset ? "disabled" : ""}>
-                            Newer
-                        </button>
-                        <button class="button small" data-zoom="1">Reset</button>
-                    </div>
                     <div class="chartLegend">
-                        ${candles
-                            ? html`
-                                  <span>
-                                      <i class="legendAsk"></i>
-                                      Sampled asks / ${candles.label} candles
-                                  </span>
-                                  <span>
-                                      <i class="legendNeutral"></i>
-                                      Single quote or unchanged close
-                                  </span>
-                              ` +
-                              series
-                                  .slice(1)
-                                  .map(
-                                      (line) => html`
-                                          <span>
-                                              <i style="background:${line.color}"></i>
-                                              ${esc(line.label)}
-                                          </span>
-                                      `,
-                                  )
-                                  .join("")
-                            : series
-                                  .map(
-                                      (line) => html`
-                                          <span>
-                                              <i style="background:${line.color}"></i>
-                                              ${esc(line.label)}
-                                          </span>
-                                      `,
-                                  )
-                                  .join("")}${!candles || series.length > 1
-                            ? '<span><i class="legendGap"></i>Dashed: missing observations</span>'
-                            : ""}${history?.resolution === "day"
-                            ? html`
-                                  <span>Bars: reported sales${candles ? " / " + candles.label : " / day"}</span>
-                              `
-                            : ""}
+                        ${series
+                            .map(
+                                (line) => html`
+                                    <span>
+                                        <i style="background:${line.color}"></i>
+                                        ${esc(line.label)}
+                                    </span>
+                                `,
+                            )
+                            .join("")}
+                        <span><i class="legendGap"></i>Dashed: nothing observed between</span>
                     </div>
                     <div class="chart">
                         ${history
                             ? ""
                             : empty(
                                   "History unavailable",
-                                  "Price history could not be loaded. Try again in a moment.",
+                                  "The history could not be loaded. Try again in a moment.",
                                   '<button class="button small" data-action="retry">Try again</button>',
                               )}
                     </div>
-                    <p class="chartNote">${history ? chartNote : ""} Dates and times are UTC.</p>
+                    <p class="chartNote">Dates and times are UTC. Nothing here is a valuation: it is what the game reported and what Kute saw listed.</p>
                 </section>
             ` +
-            exchangeEvidence(s, desk.advanced) +
-            itemIntelligence(page.intelligence) +
-            (desk.advanced ? itemDesk(page) + contributionEvidence(page.contributions) : "") +
             html`
                 <div class="equal">
                     <section class="panel">
-                        <div class="eyebrow">THE CONTEXT</div>
-                        <h2>What the data says</h2>
-                        <ul class="insightList">
-                            ${reasons
-                                .map(
-                                    (r) => html`
-                                        <li>${esc(r)}</li>
-                                    `,
-                                )
-                                .join("")}
-                        </ul>
+                        <div class="panelHead">
+                            <h3>Recent confirmed sales</h3>
+                            <small>Listings Kute saw disappear with a matching sale in Krunker's daily count</small>
+                        </div>
+                        ${page.sold.length
+                            ? html`
+                                  <div class="tableWrap">
+                                      <table>
+                                          <thead>
+                                              <tr>
+                                                  <th>When (UTC)</th>
+                                                  <th class="num">Price / KR</th>
+                                                  <th>Instance</th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              ${page.sold
+                                                  .map(
+                                                      (row) => html`
+                                                          <tr>
+                                                              <td>${esc(formatWhen(row.at))}</td>
+                                                              <td class="num">${money(row.price)}</td>
+                                                              <td class="muted">
+                                                                  ${row.serial !== null ? `#${esc(row.serial)}` : ""}${row.wear !== null ? `${row.serial !== null ? " &middot; " : ""}wear ${row.wear.toFixed(3)}` : ""}${row.serial === null && row.wear === null ? "–" : ""}
+                                                              </td>
+                                                          </tr>
+                                                      `,
+                                                  )
+                                                  .join("")}
+                                          </tbody>
+                                      </table>
+                                  </div>
+                              `
+                            : '<p class="sub">No confirmed sale yet. Krunker only publishes daily counts, so a sale is confirmed when exactly the listings that vanished add up to the day\'s count.</p>'}
                     </section>
                     <section class="panel">
-                        <div class="eyebrow">RECENT SALE-PRICE RANGE</div>
-                        <h2>${range ? `${money(range.low)} to ${money(range.high)} KR` : "More trading history needed"}</h2>
+                        <div class="panelHead">
+                            <h3>Supply</h3>
+                            <small>${page.supply?.at ? `owners read ${esc(formatAge(Date.now() - page.supply.at))} ago` : ""}</small>
+                        </div>
                         <p class="sub">
-                            ${range
-                                ? "Central range of observed daily average prices over 30 days. This is historical context, not a forecast."
-                                : "A useful range needs several completed trading days."}
+                            ${money(s.inC)} in circulation, ${s.onS} listed.${page.supply?.top1Share !== null && page.supply?.top1Share !== undefined
+                                ? ` The top holder has ${(page.supply.top1Share * 100).toFixed(1)} %`
+                                : ""}${page.supply?.top10Share !== null && page.supply?.top10Share !== undefined
+                                ? `, the top ten ${(page.supply.top10Share * 100).toFixed(1)} %.`
+                                : ""}${s.noSpin ? " Not in spins." : ""}
                         </p>
-                        ${range
+                        ${page.supply?.topOwners.length
                             ? html`
-                                  <div class="rangeTrack">
-                                      <i
-                                          style="left:${Math.max(
-                                              0,
-                                              Math.min(100, ((s.fair - range.low) / Math.max(1, range.high - range.low)) * 100),
-                                          )}%"
-                                      ></i>
-                                  </div>
-                                  <div class="breadthLabels">
-                                      <span class="muted">${money(range.low)}</span>
-                                      <span class="accent">Current estimate</span>
-                                      <span class="muted">${money(range.high)}</span>
+                                  <div class="contentTop tableWrap">
+                                      <table>
+                                          <thead>
+                                              <tr>
+                                                  <th>Top holders</th>
+                                                  <th class="num">Units</th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              ${page.supply.topOwners
+                                                  .map(
+                                                      (owner) => html`
+                                                          <tr>
+                                                              <td>${esc(owner.name)}</td>
+                                                              <td class="num">${money(owner.count)}</td>
+                                                          </tr>
+                                                      `,
+                                                  )
+                                                  .join("")}
+                                          </tbody>
+                                      </table>
                                   </div>
                               `
                             : ""}
-                        <p class="noteTop sub">
-                            Krunker estimate: ${money(s.krunker)}
-                            KR${s.floor > 0
-                                ? ` &middot; Game quick-sell value: ${money(s.floor)} KR`
-                                : " &middot; Not eligible for quick sell"}
-                        </p>
                     </section>
                 </div>
             ` +
             html`
-                <section class="sectionGap panel">
-                    <div class="panelHead">
-                        <div>
-                            <h3>Plan an asking price</h3>
-                            <p class="sub">Compare your price with the listings already competing for buyers.</p>
-                        </div>
-                        <span class="tag quiet">Price comparison</span>
-                    </div>
-                    <div class="row">
-                        <label class="field">
-                            Asking price / KR
-                            <input id="kmSellPrice" type="number" min="1" value="${s.lowest ?? s.fair}" />
-                        </label>
-                        <label class="field">
-                            Quantity
-                            <input id="kmSellQuantity" type="number" min="1" max="10000" value="1" />
-                        </label>
-                        <div id="kmPlannerResult" class="plannerResult"></div>
-                    </div>
-                    <p class="chartNote">
-                        This comparison does not predict when a listing will sell. Gross proceeds exclude listing fees and assume every unit
-                        sells at your ask.
-                    </p>
-                </section>
-            ` +
-            html`
                 <div class="panelHead">
-                    <h3>Available listings</h3>
+                    <h3>Listings</h3>
                     <small>
-                        ${listings ? listings.total : "Unknown total"} reported
-                        listed${bookAt ? ` &middot; observed ${formatAge(Date.now() - bookAt)} ago` : " &middot; freshness unknown"}
+                        ${listings ? listings.total : "?"} listed${bookAt ? ` &middot; read ${esc(formatAge(Date.now() - bookAt))} ago` : ""}
                     </small>
                 </div>
-                ${stale
-                    ? '<div class="notice">These quotes need a fresh market observation. A listing may have changed or sold since it was last seen.</div>'
-                    : ""}${desk.advanced
-                    ? html`
-                          <div class="filterBar">
-                              <input
-                                  id="kmListingMax"
-                                  type="number"
-                                  min="1"
-                                  placeholder="Max ask / KR"
-                                  aria-label="Maximum listing price"
-                              />
-                              <input id="kmSerialMax" type="number" min="1" placeholder="Max serial" aria-label="Maximum serial number" />
-                              <input
-                                  id="kmWearMax"
-                                  type="number"
-                                  min="0"
-                                  max="1"
-                                  step="0.01"
-                                  placeholder="Max wear"
-                                  aria-label="Maximum wear"
-                              />
-                              <input
-                                  id="kmAgeMax"
-                                  type="number"
-                                  min="0"
-                                  step="0.5"
-                                  placeholder="Max age in days"
-                                  aria-label="Maximum listing age in days"
-                              />
-                              <input
-                                  id="kmSellerMax"
-                                  type="number"
-                                  min="1"
-                                  placeholder="Max seller supply"
-                                  aria-label="Maximum sampled listings from one seller"
-                              />
-                          </div>
-                      `
-                    : ""}
+                ${stale ? '<div class="notice">This book was last read more than three hours ago. A listing may have changed or sold since.</div>' : ""}
             ` +
             (listingRows.length
                 ? html`
@@ -454,38 +228,22 @@ export async function itemView(desk){
                               <thead>
                                   <tr>
                                       <th class="num">Ask / KR</th>
-                                      <th class="num">vs estimate</th>
                                       <th>Seller</th>
-                                      ${desk.advanced ? '<th>Listed for</th><th>Instance</th><th class="num">Seller supply</th>' : ""}
+                                      <th>Listed for</th>
+                                      <th>Instance</th>
                                   </tr>
                               </thead>
-                              <tbody id="kmListingRows">
+                              <tbody>
                                   ${listingRows
                                       .map(
                                           (l) => html`
-                                              <tr
-                                                  data-price="${l.price}"
-                                                  data-serial="${l.serial ?? ""}"
-                                                  data-wear="${l.wear ?? ""}"
-                                                  data-age="${l.ageMs === null ? "" : Math.max(0, l.ageMs) / 86_400_000}"
-                                                  data-seller-count="${l.sellerListings > 0 ? l.sellerListings : ""}"
-                                              >
+                                              <tr>
                                                   <td class="num">${money(l.price)}</td>
-                                                  <td class="num">${change(l.price / s.fair - 1)}</td>
-                                                  <td>${esc(l.seller ?? "Unavailable")}</td>
-                                                  ${desk.advanced
-                                                      ? html`
-                                                            <td class="muted">${l.ageMs === null ? "Unknown" : formatAge(l.ageMs)}</td>
-                                                            <td class="muted">
-                                                                ${l.serial !== null ? `#${esc(l.serial)}` : ""}${l.wear !== null
-                                                                    ? ` &middot; wear ${l.wear.toFixed(3)}`
-                                                                    : ""}
-                                                            </td>
-                                                            <td class="num muted">
-                                                                ${l.sellerListings > 0 ? l.sellerListings : "Unknown"}
-                                                            </td>
-                                                        `
-                                                      : ""}
+                                                  <td>${esc(l.seller ?? "–")}${l.sellerListings > 1 ? `<small>${l.sellerListings} listings</small>` : ""}</td>
+                                                  <td class="muted">${l.ageMs === null ? "–" : esc(formatAge(l.ageMs))}</td>
+                                                  <td class="muted">
+                                                      ${l.serial !== null ? `#${esc(l.serial)}` : ""}${l.wear !== null ? `${l.serial !== null ? " &middot; " : ""}wear ${l.wear.toFixed(3)}` : ""}${l.serial === null && l.wear === null ? "–" : ""}
+                                                  </td>
                                               </tr>
                                           `,
                                       )
@@ -494,94 +252,9 @@ export async function itemView(desk){
                           </table>
                       </div>
                       <p class="chartNote">
-                          <span id="kmListingCount">
-                              Showing ${listingRows.length} sampled listings of ${listings?.total ?? "unknown"} reported.
-                          </span>
-                          Seller supply counts all sampled listings from that seller.
-                          ${listings && listings.total > (listings.observedTotal ?? listings.listings.length)
-                              ? "The upstream listing sample does not cover the full market."
-                              : ""}
+                          The cheapest ${listingRows.length} of ${listings?.total ?? "?"} listings. Krunker's item page shows at most 50, so a book with more is not complete.
                       </p>
                   `
-                : empty("No observed listings", "No quotes are available in the current sample. Watch this item and check back.")) +
-            (desk.advanced && page.depth
-                ? html`
-                      <details>
-                          <summary>Order-book sample</summary>
-                          <div class="metricsGap metrics">
-                              ${stat("Sampled listings", String(page.depth.total), "Observed quotes, not the whole market")}${stat(
-                                  "Median sampled ask",
-                                  html`
-                                      ${money(page.depth.median)}
-                                      <span class="unit">KR</span>
-                                  `,
-                                  "An offer to sell, not a sale price",
-                              )}${stat(
-                                  "Sampled sellers",
-                                  String(page.depth.sellers),
-                                  `${page.depth.maxByOne} listings from the largest sampled seller`,
-                              )}
-                          </div>
-                          <p>
-                              The middle half of sampled asks runs from ${money(page.depth.p25)} to ${money(page.depth.p75)} KR.
-                              ${money(page.depth.depthKr)} KR is offered across the sample; this does not measure buyer demand.
-                          </p>
-                      </details>
-                  `
-                : "") +
-            html`
-                <details>
-                    <summary>Supply and ownership</summary>
-                    <p>
-                        ${money(s.inC)} units in circulation. ${s.onS} listed for
-                        sale.${page.ownership?.top1Share !== null && page.ownership?.top1Share !== undefined
-                            ? ` The top holder owns ${(page.ownership.top1Share * 100).toFixed(1)}% of supply.`
-                            : " Top-holder concentration is unknown."}${page.ownership?.top10Share !== null &&
-                        page.ownership?.top10Share !== undefined
-                            ? ` The top ten hold ${(page.ownership.top10Share * 100).toFixed(1)}%.`
-                            : ""}${s.noSpin ? " This item is not available from spins; other supply sources may still apply." : ""}
-                    </p>
-                    ${desk.advanced && page.ownership?.topOwners.length
-                        ? html`
-                              <div class="contentTop tableWrap">
-                                  <table>
-                                      <thead>
-                                          <tr>
-                                              <th>Observed top holders</th>
-                                              <th class="num">Units</th>
-                                          </tr>
-                                      </thead>
-                                      <tbody>
-                                          ${page.ownership.topOwners
-                                              .slice(0, 10)
-                                              .map(
-                                                  (owner) => html`
-                                                      <tr>
-                                                          <td>${esc(owner.name)}</td>
-                                                          <td class="num">${money(owner.count)}</td>
-                                                      </tr>
-                                                  `,
-                                              )
-                                              .join("")}
-                                      </tbody>
-                                  </table>
-                              </div>
-                              <p>Up to ten holders from the latest cached owner sample. This is not a complete ownership census.</p>
-                          `
-                        : ""}
-                </details>
-            ` +
-            (page.instances && desk.advanced
-                ? html`
-                      <details>
-                          <summary>Instance attributes / ${page.instances.registered} observed</summary>
-                          <p>
-                              The registry may favour low serials and extreme wear. These counts describe observed instances. Sale-based
-                              premiums need validated evidence.
-                          </p>
-                          <div class="contentTop equal">${premiumTable(page.instances.serial)}${premiumTable(page.instances.wear)}</div>
-                      </details>
-                  `
-                : ""),
+                : empty("No listings seen", "The last book read found nothing for sale.")),
     };
 }
