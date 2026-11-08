@@ -445,6 +445,17 @@ function table(head, rows, kind = "adNum"){
 }
 
 /**
+ * @param {Record<string, any>|undefined} client
+ * @return {string} the topmost windows the host saw over the game, for the advanced view
+ */
+function overlayLine(client){
+    const overlays = Array.isArray(client?.overlays) ? client.overlays.filter((o) => o && (o.coverage ?? 0) >= 0.05) : [];
+    if (overlays.length === 0) return "";
+    const names = [...new Set(overlays.map((o) => o.process || o.class))].join(", ");
+    return `<p class="adWarn">A window from ${names} sits on top of the game. Windows composes every frame through the desktop then instead of flipping Kute's frames straight to the screen; closing that overlay lowers input lag.</p>`;
+}
+
+/**
  * @param {Report} report
  * @return {string}
  */
@@ -510,7 +521,7 @@ function advancedHtml(report){
     // reading order: the pc and the result, then the client test, then the test match
     const cards = [
         section("This PC", `<p><b>${report.gpu}</b><br><b>${report.cpu}</b>${report.laptop ? " (laptop)" : ""}, ${report.hz} Hz${report.powerOverlay ? `, Windows power mode: ${report.powerOverlay}` : ""}.${graphics}</p>
-            ${capacity}${report.rolledBack ? `<p class="adWarn">${report.rolledBack}</p>` : ""}${report.pipelineRefused ? `<p class="adWarn">${report.pipelineRefused}</p>` : ""}${inputLine(report.input)}${flood}`),
+            ${capacity}${report.rolledBack ? `<p class="adWarn">${report.rolledBack}</p>` : ""}${report.pipelineRefused ? `<p class="adWarn">${report.pipelineRefused}</p>` : ""}${inputLine(report.input)}${overlayLine(report.client)}${flood}`),
         section("Before and after", `${table(`<th></th>${metricsHead}`, [
             `<tr><td>Before (${capName(report.beforeCap)})</td>${metricCells(report.before)}</tr>`,
             report.after ? `<tr><td>After (${capName(report.afterCap)})</td>${metricCells(report.after)}</tr>` : "",
@@ -1298,6 +1309,7 @@ class AutoDetect {
                     .map((key) => [key, baseline.client[key] ?? kute.settings.data[key] ?? null])),
                 gameFrameCap: frameCapBefore,
                 hook: specs.hook ?? null,
+                overlays: specs.overlays ?? null,
                 limiter: kute.frameLimiter ?? null,
                 running: kute.running ?? null,
             },
