@@ -54,10 +54,10 @@ function marketFixture(responses){
     return { api: context.subject, calls, advance: (ms) => { now += ms; } };
 }
 
-test("market cooldown blocks searches, analysis and manual retries while cached reads still work", async() => {
+test("a cooldown blocks every new request and manual retries while cached reads still work", async() => {
     const f = marketFixture([{ status: 200, data: { item: 1 } }, { status: 429, data: null, retryAt: 1_060_000 }]);
     await f.api.cached("/market/value?ids=1", 300_000);
-    await f.api.analyzeStatus({ give: [], get: [], giveKr: 1, getKr: 0 });
+    await f.api.request("/market/value?ids=2");
     for (let i = 0; i < 50; i++) await f.api.request("/market/search?q=" + i);
     expect(await f.api.retry()).toBe(false);
     expect(await f.api.cached("/market/value?ids=1", 300_000)).toEqual({ item: 1 });
@@ -68,27 +68,20 @@ test("market cooldown blocks searches, analysis and manual retries while cached 
     expect(f.calls).toHaveLength(3);
 });
 
-test("item desk is one cached request with a fallback for older servers only", async() => {
+test("the item page is one cached request", async() => {
     const desk = { item: { skin: 1 }, history: { points: [] }, listings: { listings: [] } };
     const current = marketFixture([{ status: 200, data: desk }]);
     expect(await current.api.itemDesk(1, "1M")).toEqual(desk);
     await current.api.itemDesk(1, "1M");
     expect(current.calls).toHaveLength(1);
-    const old = marketFixture([{ status: 404, data: null }, ...Object.values(desk).map((data) => ({ status: 200, data }))]);
-    expect(await old.api.itemDesk(1, "1M")).toEqual(desk);
-    expect(old.calls).toHaveLength(4);
     const busy = marketFixture([{ status: 429, data: null, retryAt: 1_060_000 }]);
     expect(await busy.api.itemDesk(1, "1M")).toBeNull();
     expect(busy.calls).toHaveLength(1);
 });
 
-
-test("an expected desk 404 leaves no unavailable message when every fallback is cached", async() => {
+test("a 404 is an answer, not an outage", async() => {
     const f = marketFixture([{ status: 404, data: null }]);
-    for (const [path, data] of [["/market/item/1", { skin: 1 }], ["/market/item/1/history?range=1M", { points: [] }], ["/market/item/1/listings", { listings: [] }]]){
-        await f.api.cached(path, 300_000, async() => data);
-    }
-    expect((await f.api.itemDesk(1, "1M")).item.skin).toBe(1);
-    expect(f.calls).toHaveLength(1);
+    expect(await f.api.itemDesk(99, "1M")).toBeNull();
     expect(f.api.lastError).toBe("");
+    expect(f.calls).toHaveLength(1);
 });

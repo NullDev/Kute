@@ -1,10 +1,11 @@
 import { kute } from "../../client.js";
 import api from "../api.js";
 import marketApi from "./api.js";
-import { contributedSale, contributedTrade } from "./contributionData.js";
+import { contributedSale } from "./contributionData.js";
 
-// the host hands over the game's own completed history replies (modules/history.rs); nothing here
-// touches fetch or another page global, krunker's cheat checks would see that
+// the host hands over the game's own market replies (modules/history.rs); nothing here touches fetch or
+// another page global, krunker's cheat checks would see that. only completed market buys and sells are
+// reported, trades are not (fact-only cut of 2026-11-08)
 
 // the game shows the same history on every load; a report sent again after a server restart would count as a second source
 const SENT_KEY = "kute_market_sent";
@@ -39,7 +40,7 @@ class Contributions {
         this.nextPostAt = 0;
         this.failures = 0;
         this.account = "";
-        /** @type {Map<string,{kind:"sales"|"trades",row:object}>} */
+        /** @type {Map<string,object>} */
         this.queue = new Map();
         /** @type {Set<string>} hashes of account and report, across page loads */
         this.sent = loadSent();
@@ -49,8 +50,6 @@ class Contributions {
         this.controller = null;
         /** @type {Map<number,{skin:number,price:number}>} listings the game showed, by market id: what a captured buy paid */
         this.listings = new Map();
-        /** @type {Map<number,object>} the player's open trades from the last trade list, by trade id */
-        this.openTrades = new Map();
         /** @type {Set<number>} skins the game listed, the server reads their books sooner */
         this.seen = new Set();
         this.listener = (/** @type {MessageEvent} */ event) => this.receive(event);
@@ -84,7 +83,6 @@ class Contributions {
 
     forgetCaptured(){
         this.listings.clear();
-        this.openTrades.clear();
         this.seen.clear();
     }
 
@@ -97,29 +95,23 @@ class Contributions {
         catch { return ""; }
     }
 
-    /** @param {number} generation @param {string} account */
-    current(generation, account){
-        return this.active() && generation === this.generation && account === this.currentAccount();
-    }
-
     /** @param {MessageEvent} event */
     receive(event){
         /** @type {{marketHistory?:{kind?:unknown,data?:unknown},marketCapture?:{method?:unknown,path?:unknown,request?:any,data?:any}}|null} */
         let message = null;
         try { message = typeof event.data === "string" ? JSON.parse(event.data) : event.data; }
         catch { return; }
-        // an exe with market-capture sends the two history replies both ways
+        // an exe with market-capture sends the history reply both ways
         if (kute.hostFeatures?.includes("market-capture")){
             if (message?.marketCapture) this.captured(message.marketCapture);
             return;
         }
         const history = message?.marketHistory;
-        if (!history || (history.kind !== "sales" && history.kind !== "trades")) return;
-        this.capture(history.data, history.kind);
+        if (history?.kind === "sales") this.capture(history.data);
     }
 
     /**
-     * every market and trade reply the game got; only completed buys and trades become reports
+     * every market reply the game got; only completed buys become reports
      *
      * @param {{method?:unknown,path?:unknown,request?:any,data?:any}} reply
      */
@@ -128,30 +120,17 @@ class Contributions {
         const path = reply.path.split(/[?#]/)[0];
         const data = reply.data?.data;
         if (reply.method === "GET"){
-            if (path === "/market/history") this.capture(reply.data, "sales");
-            else if (path === "/trades/history"){
-                if (Array.isArray(data?.open)){
-                    this.openTrades.clear();
-                    for (const trade of data.open.slice(0, 100)) if (Number.isSafeInteger(trade?.trid)) this.openTrades.set(trade.trid, trade);
-                }
-                this.capture(reply.data, "trades");
-            }
+            if (path === "/market/history") this.capture(reply.data);
             else if (path === "/market/listings" && Array.isArray(data?.listings)) this.listed(data.listings);
             return;
         }
-        if (reply.method !== "POST") return;
-        if (path === "/market/purchase"){
-            const listing = this.listings.get(data?.mid);
-            // the history lists the same buy seconds later, the server keeps one report of it
-            if (listing && listing.skin === data?.skn){
-                const row = { marketid: data.mid, type: "buy", date: new Date().toISOString(), skinindex: data.skn, amount: listing.price, status: "completed" };
-                this.capture({ history: [row] }, "sales");
-            }
-            return;
+        if (reply.method !== "POST" || path !== "/market/purchase") return;
+        const listing = this.listings.get(data?.mid);
+        // the history lists the same buy seconds later, the server keeps one report of it
+        if (listing && listing.skin === data?.skn){
+            const row = { marketid: data.mid, type: "buy", date: new Date().toISOString(), skinindex: data.skn, amount: listing.price, status: "completed" };
+            this.capture({ history: [row] });
         }
-        const accepted = /^\/trades\/(\d+)\/accept$/.exec(path);
-        const trade = accepted && this.openTrades.get(Number(accepted[1]));
-        if (trade) this.capture({ completed: [trade] }, "trades");
     }
 
     /** @param {any[]} rows */
@@ -168,20 +147,20 @@ class Contributions {
         this.schedule();
     }
 
-    /** @param {any} body @param {"sales"|"trades"} kind */
-    capture(body, kind){
+    /** @param {any} body */
+    capture(body){
         if (!this.active() || body?.error) return;
         const account = this.currentAccount();
         const data = body?.data ?? body;
-        const rows = kind === "trades" ? data?.completed : data?.history;
+        const rows = data?.history;
         if (!Array.isArray(rows)) return;
         this.useAccount(account);
         const now = Date.now();
         for (const raw of rows.slice(0, 500)){
-            const row = kind === "trades" ? contributedTrade(raw, now) : contributedSale(raw, now);
+            const row = contributedSale(raw, now);
             if (!row) continue;
-            const key = kind + JSON.stringify(row);
-            if (!this.sent.has(shortHash(`${account}\n${key}`))) this.queue.set(key, { kind, row });
+            const key = "sales" + JSON.stringify(row);
+            if (!this.sent.has(shortHash(`${account}\n${key}`))) this.queue.set(key, row);
         }
         while (this.queue.size > 300) this.queue.delete(this.queue.keys().next().value ?? "");
         this.schedule();
@@ -205,9 +184,7 @@ class Contributions {
         const {generation} = this; const {account} = this;
         const batch = [...this.queue].slice(0, 100);
         const seen = [...this.seen];
-        /** @type {{sales:object[],trades:object[],seen:number[]}} */
-        const body = { sales: [], trades: [], seen };
-        for (const [, entry] of batch) body[entry.kind].push(entry.row);
+        const body = { sales: batch.map(([, row]) => row), seen };
         const controller = new AbortController();
         this.controller = controller;
         this.nextPostAt = Date.now() + 10_000;

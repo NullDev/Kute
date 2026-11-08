@@ -1,18 +1,24 @@
 import marketApi from "./api.js";
 import { esc, identity, money } from "./presentation.js";
 
-/** @typedef {{skin:number,name:string,thumbnail?:string|null,rarity?:number,fair:number}} SearchItem */
+/** @typedef {import("./types.js").SkinFacts} SearchItem */
 
 /** @param {string} id @param {string} context @param {string} label @param {string} [value] */
-export const itemSearch = (id, context, label, value = "") => `<div class="itemSearch"><input id="${id}" data-item-search="${context}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}Options" aria-label="${esc(label)}${context === "give" ? " to your side" : ""}${context === "get" ? " to their side" : ""}" placeholder="${esc(label)}" autocomplete="off" value="${esc(value)}"><div class="suggestions" id="${id}List" hidden></div></div>`;
+export const itemSearch = (id, context, label, value = "") => `<div class="itemSearch"><input id="${id}" data-item-search="${context}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}Options" aria-label="${esc(label)}" placeholder="${esc(label)}" autocomplete="off" value="${esc(value)}"><div class="suggestions" id="${id}List" hidden></div></div>`;
+
+/** @param {SearchItem} item @return {string} the fact a suggestion shows next to the name */
+const hint = (item) => {
+    if (item.lastSoldPrice !== null) return `${money(item.lastSoldPrice)}<small>last sold</small>`;
+    if (item.lowest !== null) return `${money(item.lowest)}<small>lowest ask</small>`;
+    return `${item.sales30d}<small>sold / 30D</small>`;
+};
 
 export default class ItemSearch {
-    /** @param {ShadowRoot} root @param {AbortSignal} signal @param {(item:SearchItem,context:string)=>void} select @param {(q:string,context:string)=>void} browse @param {()=>SearchItem[]} holdings */
-    constructor(root, signal, select, browse, holdings){
+    /** @param {ShadowRoot} root @param {AbortSignal} signal @param {(item:SearchItem,context:string)=>void} select @param {(q:string,context:string)=>void} browse */
+    constructor(root, signal, select, browse){
         this.root = root;
         this.select = select;
         this.browse = browse;
-        this.holdings = holdings;
         /** @type {HTMLInputElement|null} */
         this.input = null;
         /** @type {HTMLElement|null} */
@@ -76,20 +82,12 @@ export default class ItemSearch {
             /** @type {SearchItem[]|null} */
             let items = null;
             try {
-                if (input.dataset.itemSearch === "holdings") items = this.holdings().filter((i) => i.name.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
-                else {
-                    /** @type {import("./types.js").SearchReply|null} */
-                    const reply = await marketApi.cached(`/market/search?q=${encodeURIComponent(q)}&sort=volume&page=1`, 60_000);
-                    items = reply?.items ?? null;
-                }
+                items = (await marketApi.search(q))?.items ?? null;
             }
             catch { items = null; }
             if (sequence !== this.sequence || !input.isConnected || input.value.trim() !== q) return;
             this.items = items?.slice(0, 8) ?? [];
-            const context = input.dataset.itemSearch;
-            const label = context === "holdings" ? "Your holdings" : "All items";
-            const action = context === "give" || context === "get" ? "Add" : "Open";
-            list.innerHTML = `<div class="suggestionHeading">${label}<span>${action} an item</span></div><div id="${input.id}Options" role="listbox" aria-label="${label}">${this.items.map((item, index) => `<button type="button" role="option" tabindex="-1" aria-selected="false" id="${input.id}Option${index}" data-suggestion="${index}">${identity(item)}<span class="suggestionValue">${money(item.fair)}<small>KR est.</small></span></button>`).join("")}</div>${!items || !items.length ? `<div class="suggestionStatus" role="status">${items ? "No matching items" : "Search unavailable. Try typing again."}</div>` : ""}${context === "global" || context === "discover" ? '<button type="button" class="searchAll" data-search-all>View search results &#8594;</button>' : ""}`;
+            list.innerHTML = `<div class="suggestionHeading">All items<span>Open an item</span></div><div id="${input.id}Options" role="listbox" aria-label="All items">${this.items.map((item, index) => `<button type="button" role="option" tabindex="-1" aria-selected="false" id="${input.id}Option${index}" data-suggestion="${index}">${identity(item)}<span class="suggestionValue">${hint(item)}</span></button>`).join("")}</div>${!items || !items.length ? `<div class="suggestionStatus" role="status">${items ? "No matching items" : "Search unavailable. Try typing again."}</div>` : ""}<button type="button" class="searchAll" data-search-all>View all results &#8594;</button>`;
         }, 250);
     }
 

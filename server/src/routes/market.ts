@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { krunker } from "../api/index";
 import { apiHealth } from "../api/health";
-import type { DealsQuery, Grade, HistoryRange, MarketEngine, MoversWindow, ObserveBody, SearchQuery, SearchSort, TradeInput } from "../marketEngine";
+import type { HistoryRange, MarketEngine, ObserveBody, SearchQuery, SearchSort } from "../marketEngine";
 import { attestationReady, checkSession, confirmSession, issueChallenge, sessionCounts, type Attestation } from "../util/marketSessions";
 import { applyHit, createRateLimit, hit, sourceKey } from "../util/rateLimit";
 import { TtlCache } from "../util/ttlCache";
@@ -11,7 +11,7 @@ import { TtlCache } from "../util/ttlCache";
 // =  All rights reserved  = //
 // ========================= //
 
-// everything a client reads about the market: derived numbers only, never a krunker reply as is. every
+// everything a client reads about the market: facts the collector observed, never a krunker reply as is. every
 // route but status needs a session (util/marketSessions), has a per session and a per address limit,
 // and serves from a short cache so the engine computes each answer once per window
 
@@ -19,13 +19,9 @@ const SECOND = 1000;
 const MINUTE = 60 * SECOND;
 
 const SESSION_HEADER = "x-kute-session";
-const GRADES: Grade[] = ["A", "B", "C", "D", "F"];
 const RANGES: HistoryRange[] = ["1D", "7D", "1M", "3M", "1Y", "ALL"];
-const WINDOWS: MoversWindow[] = ["1D", "7D", "30D"];
-const SORTS: SearchSort[] = ["volume", "value", "trend1d", "trend7d", "trend30d", "liquidity", "onsale", "name"];
+const SORTS: SearchSort[] = ["sales", "lowest", "name"];
 const MAX_VALUE_IDS = 100;
-const MAX_TRADE_ITEMS = 40;
-const PORTFOLIO_LOOKUPS = 30;
 
 const cache = new TtlCache();
 
@@ -38,8 +34,6 @@ const int = (value: string | undefined, min: number, max: number): number | unde
 };
 
 const oneOf = <T extends string>(value: string | undefined, allowed: T[]): T | undefined => (allowed.includes(value as T) ? value as T : undefined);
-
-const name = (value: unknown): string | null => (typeof value === "string" && /^[A-Za-z0-9_]{1,20}$/.test(value) ? value : null);
 
 export async function marketRoutes(app: FastifyInstance, options: { engine: MarketEngine | null }): Promise<void> {
     const { engine } = options;
@@ -102,16 +96,6 @@ export async function marketRoutes(app: FastifyInstance, options: { engine: Mark
         return { asOf, ...(value as object) };
     };
 
-    app.get("/market/intelligence", (req, reply) => {
-        if (!gate(req, reply, "read", 60)) return reply;
-        if (!engine!.query.intelligence) return reply.code(503).send({ error: "market intelligence unavailable" });
-        const q = req.query as Query;
-        const skin = int(q.skin, 0, 100_000_000);
-        if (q.skin !== undefined && skin === undefined) return reply.code(400).send({ error: "bad skin" });
-        const kind = oneOf(q.kind, ["activity", "supply", "relative", "risk", "availability"]);
-        return serve(reply, MINUTE, `intelligence:${skin ?? "all"}:${kind ?? "all"}`, () => engine!.query.intelligence!(skin, kind));
-    });
-
     app.get("/market/search", (req, reply) => {
         if (!gate(req, reply, "read", 60)) return reply;
         const q = req.query as Query;
@@ -124,7 +108,6 @@ export async function marketRoutes(app: FastifyInstance, options: { engine: Mark
             page: int(q.page, 1, 200) ?? 1,
             budget: int(q.budget, 1, 1_000_000_000),
             minSales: int(q.min_sales, 0, 100_000),
-            minActivity: int(q.min_activity, 0, 100_000),
         };
         return serve(reply, MINUTE, "search:" + JSON.stringify(query), () => engine!.query.search(query));
     });
@@ -182,81 +165,10 @@ export async function marketRoutes(app: FastifyInstance, options: { engine: Mark
         return serve(reply, 5 * MINUTE, "value:" + ids.join(","), () => engine!.query.value(ids));
     });
 
-    app.get("/market/movers", (req, reply) => {
-        if (!gate(req, reply, "read", 60)) return reply;
-        const window = oneOf((req.query as Query).window, WINDOWS) ?? "7D";
-        return serve(reply, 5 * MINUTE, "movers:" + window, () => engine!.query.movers(window));
-    });
-
-    app.get("/market/deals", (req, reply) => {
-        if (!gate(req, reply, "read", 60)) return reply;
-        const q = req.query as Query;
-        const query: DealsQuery = { budget: int(q.budget, 1, 1_000_000_000), minGrade: oneOf(q.min_grade, GRADES), rarity: int(q.rarity, 0, 7), type: int(q.type, 0, 30), limit: int(q.limit, 1, 200) ?? 50 };
-        return serve(reply, MINUTE, "deals:" + JSON.stringify(query), () => engine!.query.deals(query));
-    });
-
-    app.get("/market/indices", (req, reply) => {
-        if (!gate(req, reply, "read", 60)) return reply;
-        return serve(reply, 60 * MINUTE, "indices", () => engine!.query.indices());
-    });
-
-    app.get("/market/overview", (req, reply) => {
-        if (!gate(req, reply, "read", 60)) return reply;
-        return serve(reply, 60 * MINUTE, "overview", () => engine!.query.overview());
-    });
-
-    app.post("/market/analyze", (req, reply) => {
-        if (!gate(req, reply, "analyze", 20)) return reply;
-        const body = (req.body ?? {}) as Partial<TradeInput>;
-        const side = (items: unknown): TradeInput["give"] | null => {
-            if (!Array.isArray(items) || items.length > MAX_TRADE_ITEMS) return null;
-            const out: TradeInput["give"] = [];
-            for (const entry of items as unknown[]){
-                if (!entry || typeof entry !== "object") return null;
-                const item = entry as Record<string, unknown>;
-                const skin = int(String(item.skin), 0, 100_000_000);
-                const count = int(String(item.count ?? 1), 1, 10_000);
-                if (skin === undefined || count === undefined) return null;
-                out.push({
-                    skin,
-                    count,
-                    serial: typeof item.serial === "number" && item.serial > 0 ? Math.floor(item.serial) : undefined,
-                    wear: typeof item.wear === "number" && item.wear >= 0 && item.wear <= 1 ? item.wear : undefined,
-                    style: typeof item.style === "number" ? Math.floor(item.style) : undefined,
-                });
-            }
-            return out;
-        };
-        const give = side(body.give ?? []);
-        const get = side(body.get ?? []);
-        const kr = (v: unknown): number | null => {
-            if (v === undefined) return 0;
-            return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1e9 ? Math.floor(v) : null;
-        };
-        const giveKr = kr(body.giveKr);
-        const getKr = kr(body.getKr);
-        if (!give || !get || giveKr === null || getKr === null) return reply.code(400).send({ error: "give and get are item lists of {skin, count}, giveKr and getKr numbers" });
-        if (!give.length && !get.length && !giveKr && !getKr) return reply.code(400).send({ error: "an empty trade" });
-        return engine!.query.analyze({ give, get, giveKr, getKr });
-    });
-
-    app.get("/market/portfolio", async(req, reply) => {
-        if (!gate(req, reply, "portfolio", 6)) return reply;
-        const player = name((req.query as Query).name);
-        if (!player) return reply.code(400).send({ error: "name: a krunker username" });
-        // every new name can cost a developer key request, the per session limit alone scales with sessions
-        const key = "portfolio:" + player.toLowerCase();
-        if (!cache.has(key) && !applyHit(reply, hit("market-portfolio-lookups", "all", PORTFOLIO_LOOKUPS, MINUTE), "The market is busy, try again in a minute.")) return reply;
-        const { value } = await cache.getAsync(key, 5 * MINUTE, () => engine!.query.portfolio(player));
-        if (!value) return reply.code(404).send({ error: "player not found" });
-        reply.header("Cache-Control", "private, max-age=300");
-        return value;
-    });
-
     app.post("/market/watch", { bodyLimit: 4 * 1024 }, (req, reply) => {
         const source = gate(req, reply, "watch", 6);
         if (!source) return reply;
-        return engine!.query.watch?.(source, req.body) ?? { watched: 0 };
+        return engine!.query.watch(source, req.body);
     });
 
     app.post("/market/observe", { bodyLimit: 256 * 1024 }, (req, reply) => {

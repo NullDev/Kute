@@ -1,9 +1,9 @@
 import { kute } from "../../client.js";
 import api from "../api.js";
 
-// the one door of the market module to kute.lol: a session from the exe's attestation, then reads with
-// the session header; a 401 renews once, every answer is cached for its own ttl so a card walk or a
-// trade window redraw never repeats a request
+// the one door of the item stats module to kute.lol: a session from the exe's attestation, then reads with
+// the session header; a 401 renews once, every answer is cached for its own ttl so a trade window redraw
+// never repeats a request
 
 const SESSION_KEY = "kute_market_session";
 const SESSION_HEADER = "x-kute-session";
@@ -25,7 +25,7 @@ class MarketApi {
         this.memorySession = null;
         /** @type {Map<string, {at: number, ttl: number, value: Promise<any>}>} */
         this.cache = new Map();
-        /** why the last session attempt failed, shown in the terminal */
+        /** why the last session attempt failed, shown in the window */
         this.lastError = "";
         this.retryAt = 0;
     }
@@ -120,16 +120,16 @@ class MarketApi {
     async newSession(){
         this.lastError = "";
         if (!this.loggedIn()){
-            this.lastError = "log in to Krunker to use the market";
+            this.lastError = "log in to Krunker to see item stats";
             return null;
         }
         if (!this.hostSupported()){
-            this.lastError = "this Kute version cannot sign in to the market, update Kute";
+            this.lastError = "this Kute version cannot sign in for item stats, update Kute";
             return null;
         }
         const challenge = await api.requestStatus("/market/session", { method: "POST" });
         if (!challenge.data?.challenge){
-            this.lastError = challenge.status === 503 ? "the market is not available right now" : "could not reach the market";
+            this.lastError = challenge.status === 503 ? "item stats are not available right now" : "could not reach the item stats server";
             if (challenge.status === 429) this.limited(challenge.retryAt);
             return null;
         }
@@ -144,7 +144,7 @@ class MarketApi {
             body: JSON.stringify({ challenge: signed.challenge, sig: signed.sig, version: signed.version, loggedIn: signed.loggedIn }),
         });
         if (!confirm.data?.session){
-            this.lastError = typeof confirm.error?.error === "string" ? confirm.error.error : "the market refused the sign in";
+            this.lastError = typeof confirm.error?.error === "string" ? confirm.error.error : "the server refused the sign in";
             if (confirm.status === 429) this.limited(confirm.retryAt);
             return null;
         }
@@ -159,7 +159,7 @@ class MarketApi {
     }
 
     /**
-     * a market request with the session, renewed once on a 401
+     * a request with the session, renewed once on a 401
      *
      * @param {string} path "/market/value?ids=1"
      * @param {RequestInit} [init]
@@ -185,14 +185,14 @@ class MarketApi {
         if (result.status === 429){
             this.limited(result.retryAt);
         }
-        else this.lastError = result.data === null && result.status !== 404 ? "The market is temporarily unavailable. Please try again shortly." : "";
+        else this.lastError = result.data === null && result.status !== 404 ? "Item stats are temporarily unavailable. Please try again shortly." : "";
         return result;
     }
 
     /** @param {number} [retryAt] */
     limited(retryAt){
         this.retryAt = retryAt ?? Date.now() + 60_000;
-        this.lastError = `Market request limit reached. Try again after ${new Date(this.retryAt).toLocaleTimeString()}.`;
+        this.lastError = `Request limit reached. Try again after ${new Date(this.retryAt).toLocaleTimeString()}.`;
     }
 
     /**
@@ -224,30 +224,18 @@ class MarketApi {
         return api.retry();
     }
 
-    /** @param {number} skin @param {string} range */
-    async itemDesk(skin, range){
-        const path = `/market/item/${skin}/desk?range=${range}`;
-        return this.cached(path, 60_000, async() => {
-            const result = await this.requestStatus(path);
-            if (result.status !== 404) return result.data;
-            // older servers expose the three original endpoints
-            const item = await this.cached(`/market/item/${skin}`, 300_000);
-            if (!item) return null;
-            const [history, listings] = await Promise.all([
-                this.cached(`/market/item/${skin}/history?range=${range}`, 300_000),
-                this.cached(`/market/item/${skin}/listings`, 60_000),
-            ]);
-            return { item, history, listings };
-        });
+    /** @param {number} skin @param {string} range @return {Promise<import("./types.js").ItemDeskReply|null>} */
+    itemDesk(skin, range){
+        return this.cached(`/market/item/${skin}/desk?range=${range}`, 60_000);
     }
 
     /**
      * @param {number[]} skins
-     * @return {Promise<Record<string, import("./types.js").SkinValue>>}
+     * @return {Promise<Record<string, import("./types.js").SkinFacts>>}
      */
     async values(skins){
         const ids = [...new Set(skins)].sort((a, b) => a - b);
-        /** @type {Record<string, import("./types.js").SkinValue>} */
+        /** @type {Record<string, import("./types.js").SkinFacts>} */
         const out = {};
         for (let i = 0; i < ids.length; i += 100){
             const reply = await this.cached(`/market/value?ids=${ids.slice(i, i + 100).join(",")}`, 5 * 60 * 1000);
@@ -258,11 +246,11 @@ class MarketApi {
 
     /**
      * @param {string[]} paths preview image paths after textures/previews/
-     * @return {Promise<Record<string, import("./types.js").SkinValue>>}
+     * @return {Promise<Record<string, import("./types.js").SkinFacts>>}
      */
     async valuesByThumbnails(paths){
         const unique = [...new Set(paths)].sort();
-        /** @type {Record<string, import("./types.js").SkinValue>} */
+        /** @type {Record<string, import("./types.js").SkinFacts>} */
         const out = {};
         for (let i = 0; i < unique.length; i += 100){
             const reply = await this.cached(`/market/value?thumbs=${encodeURIComponent(unique.slice(i, i + 100).join(","))}`, 5 * 60 * 1000);
@@ -271,17 +259,9 @@ class MarketApi {
         return out;
     }
 
-    /**
-     * @param {import("./types.js").TradeInput} trade
-     * @return {Promise<import("./types.js").TradeVerdict|null>}
-     */
-    analyze(trade){
-        return this.request("/market/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) });
-    }
-
-    /** @param {import("./types.js").TradeInput} trade */
-    analyzeStatus(trade){
-        return this.requestStatus("/market/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(trade) });
+    /** @param {string} q @return {Promise<import("./types.js").SearchReply|null>} */
+    search(q){
+        return this.cached(`/market/search?q=${encodeURIComponent(q)}&sort=sales&page=1`, 60_000);
     }
 
     /** @param {object} body @param {AbortSignal} [signal] */

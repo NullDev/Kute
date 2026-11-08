@@ -1,12 +1,13 @@
 import marketApi from "./api.js";
-import { formatKr, formatPercent } from "./types.js";
-import { esc, TRADE_VERDICTS, tradeBreakdown, tradeNotes, verdictOf } from "./presentation.js";
+import { esc } from "./presentation.js";
+import { CHANGED_EVENT, setOwnPrice } from "./prices.js";
+import { breakdownHtml, differenceHtml, resolveEntries, sideHtml, sideOf } from "./tradeFacts.js";
 import template from "../../components/marketTrade.html";
 
 const POLL_MS = 1200;
 
 /**
- * @typedef {import("./types.js").TradeItem & {path?:string}} Entry
+ * @typedef {import("./tradeFacts.js").Entry} Entry
  * @typedef {{give:Entry[],get:Entry[],giveKr:number,getKr:number,anchor:Element,slot?:HTMLElement|null,key:string}} Snapshot
  */
 
@@ -20,6 +21,9 @@ class TradeWindows {
         this.generation = 0;
         this.busy = false;
         this.expanded = false;
+        /** @type {{give:Entry[],get:Entry[],facts:Record<string, import("./types.js").SkinFacts>}|null} the last resolved trade, redrawn when a price changes */
+        this.resolved = null;
+        this.resolvedKey = "";
         this.dismiss = (/** @type {Event} */ event) => {
             const details = this.box?.shadowRoot?.querySelector("details");
             if (!details?.open) return;
@@ -32,6 +36,16 @@ class TradeWindows {
             else if (event.target instanceof Node && this.box?.contains(event.target)) return;
             details.open = false;
             this.expanded = false;
+        };
+        this.onPrices = () => {
+            // the key forces a redraw from the kept facts on the next tick
+            this.lastKey = "";
+        };
+        this.onChange = (/** @type {Event} */ event) => {
+            const input = event.target;
+            if (!(input instanceof HTMLInputElement) || !input.dataset.ownSkin) return;
+            const value = Number(input.value);
+            setOwnPrice({ skin: Number(input.dataset.ownSkin), name: input.dataset.ownName ?? "" }, value > 0 ? value : null);
         };
         /** @type {HTMLDivElement|null} */
         this.box = null;
@@ -49,6 +63,7 @@ class TradeWindows {
         this.timer = window.setInterval(() => this.tick(), POLL_MS);
         window.addEventListener("pointerdown", this.dismiss, true);
         window.addEventListener("keydown", this.dismiss, true);
+        window.addEventListener(CHANGED_EVENT, this.onPrices);
     }
 
     stop(){
@@ -57,6 +72,7 @@ class TradeWindows {
         this.generation++;
         window.removeEventListener("pointerdown", this.dismiss, true);
         window.removeEventListener("keydown", this.dismiss, true);
+        window.removeEventListener(CHANGED_EVENT, this.onPrices);
         this.clear();
     }
 
@@ -66,6 +82,7 @@ class TradeWindows {
         if (this.chatList) this.chatList.style.maxHeight = "";
         this.chatList = null;
         this.lastKey = "";
+        this.resolved = null;
         this.expanded = false;
     }
 
@@ -146,75 +163,67 @@ class TradeWindows {
             if (!snapshot){ this.clear(); return; }
             if (Date.now() < this.retryAt) return;
             if (snapshot.key === this.lastKey && this.box?.isConnected && this.placed(snapshot)) return;
+            const sameTrade = this.resolved && snapshot.key === this.resolvedKey;
             this.lastKey = snapshot.key;
             const empty = !snapshot.give.length && !snapshot.get.length && !snapshot.giveKr && !snapshot.getKr;
-            this.render(snapshot, null, empty ? "Add items on both sides to compare estimated values." : "Updating estimates...");
-            if (empty){ this.lastKey = snapshot.key; return; }
-            const paths = [...snapshot.give, ...snapshot.get].filter((item) => item.skin < 0 && item.path).map((item) => /** @type {string} */ (item.path));
-            const values = paths.length ? await marketApi.valuesByThumbnails(paths) : {};
-            if (!this.current(snapshot, generation)) return;
-            /** @param {Entry[]} items */
-            const resolve = (items) => items.map(({ path, ...item }) => ({ ...item, skin: item.skin < 0 ? values[path ?? ""]?.skin ?? -1 : item.skin }));
-            const give = resolve(snapshot.give);
-            const get = resolve(snapshot.get);
-            if ([...give, ...get].some((item) => item.skin < 0)){
-                this.render(snapshot, null, "An item could not be identified. A complete comparison is unavailable.");
+            if (sameTrade){
+                this.render(snapshot, this.resolved, "");
                 return;
             }
-            const result = await marketApi.analyzeStatus({ give, get, giveKr: snapshot.giveKr, getKr: snapshot.getKr });
-            const verdict = result.data;
-            if (verdict){
+            this.render(snapshot, null, empty ? "Add items on both sides to see what they sold and list for." : "Looking up the items...");
+            if (empty) return;
+            const lookup = (/** @type {string[]} */ paths) => marketApi.valuesByThumbnails(paths);
+            const give = await resolveEntries(snapshot.give, lookup);
+            const get = await resolveEntries(snapshot.get, lookup);
+            if (!this.current(snapshot, generation)) return;
+            if (!give || !get){
+                this.render(snapshot, null, "An item could not be identified.");
+                return;
+            }
+            const facts = await marketApi.values([...give, ...get].map((e) => e.skin));
+            if (!this.current(snapshot, generation)) return;
+            const got = Object.keys(facts).length > 0 || ![...give, ...get].length;
+            if (got){
                 this.failures = 0;
                 this.retryAt = 0;
+                this.resolved = { give, get, facts };
+                this.resolvedKey = snapshot.key;
+                this.render(snapshot, this.resolved, "");
             }
             else {
                 this.failures++;
-                this.retryAt = result.status === 429 ? result.retryAt ?? Date.now() + 60_000 : Date.now() + Math.min(60_000, 5000 * 2 ** (this.failures - 1));
+                this.retryAt = marketApi.retryAt > Date.now() ? marketApi.retryAt : Date.now() + Math.min(60_000, 5000 * 2 ** (this.failures - 1));
                 this.lastKey = "";
+                this.render(snapshot, null, marketApi.lastError || "Item stats unavailable. Retrying with a longer delay.");
             }
-            if (!this.current(snapshot, generation)) return;
-            const fallback = result.status === 429
-                ? `Request limit reached. Estimates resume after ${new Date(this.retryAt).toLocaleTimeString()}.`
-                : "Estimates unavailable. Retrying with a longer delay.";
-            this.render(snapshot, verdict, fallback);
         }
         finally {
             this.busy = false;
         }
     }
 
-    /** @param {Snapshot} snapshot @param {import("./types.js").TradeVerdict|null} verdict @param {string} fallback */
-    render(snapshot, verdict, fallback){
+    /** @param {Snapshot} snapshot @param {{give:Entry[],get:Entry[],facts:Record<string, import("./types.js").SkinFacts>}|null} resolved @param {string} fallback */
+    render(snapshot, resolved, fallback){
         if (!this.box){
             this.box = document.createElement("div");
             this.box.className = "kuteTradeBox";
             this.box.style.cssText = "all:initial;display:block;box-sizing:border-box;width:100%;min-width:0;margin:0 0 10px;container-type:inline-size;";
-            this.box.attachShadow({ mode: "open" }).innerHTML = template;
+            const shadow = this.box.attachShadow({ mode: "open" });
+            shadow.innerHTML = template;
+            shadow.addEventListener("change", this.onChange);
         }
         const panel = this.box.shadowRoot?.querySelector(".panel");
         if (!panel) return;
         panel.className = `panel${snapshot.give.length || snapshot.get.length || snapshot.giveKr || snapshot.getKr ? " filled" : ""}`;
         this.expanded = panel.querySelector("details")?.open ?? this.expanded;
-        let html = '<header><span class="brand">Kute trade insight</span>';
-        if (!verdict) html += `</header><p class="empty" role="status">${esc(fallback)}</p>`;
+        let html = '<header><span class="brand">Kute item stats</span>';
+        if (!resolved) html += `</header><p class="empty" role="status">${esc(fallback)}</p>`;
         else {
-            const oneSided = (!snapshot.give.length && !snapshot.giveKr) || (!snapshot.get.length && !snapshot.getKr);
-            const partial = [...verdict.give.items, ...verdict.get.items].some((item) => item.unknown);
-            const kind = verdictOf(verdict.verdict);
-            const status = oneSided ? "Add items on both sides to compare" : TRADE_VERDICTS[kind].detail;
-            let callout = TRADE_VERDICTS[kind].label;
-            if (partial) callout = "Incomplete comparison";
-            if (oneSided) callout = "Add both sides";
-            html += `<span class="status ${oneSided ? "" : kind}" role="status">${status}</span></header>`;
-            /** @param {import("./types.js").TradeSide} side @param {string} label */
-            const total = (side, label) => {
-                const count = side.items.reduce((sum, item) => sum + item.count, 0);
-                const incomplete = side.items.some((item) => item.unknown);
-                return `<div class="side"><span class="label">${label}</span><strong>${formatKr(side.value)}${incomplete ? "+" : ""} <span class="unit">KR</span></strong><span class="meta">${count} ${count === 1 ? "item" : "items"}${side.kr ? ` + ${formatKr(side.kr)} KR` : ""} &middot; ${incomplete ? "Partial estimate" : "Estimated value"}</span></div>`;
-            };
-            const difference = oneSided || partial ? '<strong>&ndash;</strong><span class="meta">Incomplete comparison</span>' : `<strong>${verdict.difference > 0 ? "+" : ""}${formatKr(verdict.difference)} <span class="unit">KR</span></strong><span class="meta">${esc(formatPercent(verdict.differenceShare))} of the larger side</span>`;
-            html += `<div class="comparison">${total(verdict.give, "You give")}<div class="difference ${oneSided || partial ? "" : kind}"><span class="verdict" role="status">${callout}</span>${difference}</div>${total(verdict.get, "You receive")}</div>`;
-            html += `<details${this.expanded ? " open" : ""}><summary><span class="show">Item breakdown &amp; evidence</span><span class="hide">Hide item breakdown &amp; evidence</span></summary><div class="detailBody"><div class="breakdown">${tradeBreakdown(verdict.give, "You give")}${tradeBreakdown(verdict.get, "You receive")}</div>${tradeNotes(verdict)}</div></details>`;
+            const give = sideOf(resolved.give, snapshot.giveKr, resolved.facts);
+            const get = sideOf(resolved.get, snapshot.getKr, resolved.facts);
+            html += '<span class="status">Last sales and asks on file, totals only from your own prices</span></header>';
+            html += `<div class="comparison">${sideHtml(give, "You give")}<div class="difference">${differenceHtml(give, get)}</div>${sideHtml(get, "You receive")}</div>`;
+            html += `<details${this.expanded ? " open" : ""}><summary><span class="show">Items, facts &amp; your prices</span><span class="hide">Hide items</span></summary><div class="detailBody"><div class="breakdown">${breakdownHtml(give, "You give")}${breakdownHtml(get, "You receive")}</div></div></details>`;
         }
         panel.innerHTML = html;
         if (snapshot.slot){

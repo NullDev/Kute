@@ -116,7 +116,7 @@ class WatchAlerts {
             for (const w of watch){
                 if (w.target === null || !latest.some((i) => i.skin === w.skin && i.target === w.target)) continue;
                 const v = values[w.skin];
-                if (!v || !v.bookAt || !v.valuedAt || Date.now() - Math.min(v.bookAt, v.valuedAt) > MAX_AGE || v.lowest === null) continue;
+                if (!v || !v.bookAt || Date.now() - v.bookAt > MAX_AGE || v.lowest === null) continue;
                 const reached = v.lowest <= w.target;
                 const previous = this.seen.get(w.skin);
                 if (reached && (!previous?.reached || previous.target !== w.target)){

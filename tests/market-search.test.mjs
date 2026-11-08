@@ -17,29 +17,32 @@ function fixture(){
     const context = vm.createContext({
         window: { setTimeout: (f) => { timers.set(++timer, f); return timer; } },
         clearTimeout: (id) => timers.delete(id),
-        marketApi: { cached: (path) => new Promise((resolve, reject) => requests.push({ path, resolve, reject })) },
+        marketApi: { search: (q) => new Promise((resolve, reject) => requests.push({ q, resolve, reject })) },
         identity: (item) => item.name,
         money: String,
+        esc: String,
     });
     vm.runInContext(source, context);
     const controller = new AbortController();
-    const search = new context.ItemSearch({ addEventListener(){}, getElementById: () => list }, controller.signal, () => {}, () => {}, () => [{ skin: 1, name: "Star in inventory", fair: 10 }]);
+    const search = new context.ItemSearch({ addEventListener(){}, getElementById: () => list }, controller.signal, () => {}, () => {});
     const type = (q) => { input.value = q; search.search(input); };
     const flush = () => { const callbacks = [...timers.values()]; timers.clear(); return callbacks.map((f) => f()); };
     return { search, input, list, attributes, requests, controller, type, flush };
 }
 
-const reply = (skin, name) => ({ items: [{ skin, name, fair: 100 }] });
+const reply = (skin, name, extra = {}) => ({ items: [{ skin, name, lastSoldPrice: null, lowest: null, sales30d: 3, ...extra }] });
 
-describe("market item suggestions", () => {
-    test("debounces keystrokes into one unfiltered request", async() => {
+describe("item suggestions", () => {
+    test("debounces keystrokes into one request and shows a fact next to the name", async() => {
         const f = fixture();
         f.type("S"); f.type("St"); f.type("Star");
         const work = f.flush();
-        expect(f.requests.map((r) => r.path)).toEqual(["/market/search?q=Star&sort=volume&page=1"]);
-        f.requests[0].resolve(reply(1, "Star"));
+        expect(f.requests.map((r) => r.q)).toEqual(["Star"]);
+        f.requests[0].resolve(reply(1, "Star", { lastSoldPrice: 140 }));
         await Promise.all(work);
         expect(f.list.innerHTML).toContain("Star");
+        expect(f.list.innerHTML).toContain("last sold");
+        expect(f.list.innerHTML).not.toContain("est.");
     });
 
     test("an older response cannot replace newer suggestions, even for the same query", async() => {
@@ -83,15 +86,5 @@ describe("market item suggestions", () => {
         f.requests[2].resolve(reply(1, "Star"));
         await Promise.all(recovered);
         expect(f.search.items).toHaveLength(1);
-    });
-
-    test("inventory suggestions use owned items without a market request", async() => {
-        const f = fixture();
-        f.input.dataset.itemSearch = "holdings";
-        f.type("sTaR");
-        await Promise.all(f.flush());
-        expect(f.requests).toHaveLength(0);
-        expect(f.list.innerHTML).toContain("Your holdings");
-        expect(f.search.items.map((i) => i.skin)).toEqual([1]);
     });
 });
