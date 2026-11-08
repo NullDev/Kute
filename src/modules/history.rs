@@ -13,7 +13,7 @@ const ORIGIN: &str = "https://gapi.svc.krunker.io";
 const MAX_REQUEST_BODY: usize = 16 * 1024;
 
 struct Pending {
-    // the two replies bundles before market-capture read as marketHistory
+    // the history reply bundles before market-capture read as marketHistory
     history: Option<&'static str>,
     method: String,
     path: String,
@@ -28,9 +28,10 @@ thread_local! {
     static BODIES: RefCell<HashMap<i32, Pending>> = RefCell::new(HashMap::new());
 }
 
+// only the market routes: trades are not read since the fact-only cut of item stats (2026-11-08)
 fn market_path(url: &str) -> Option<&str> {
     let path = url.strip_prefix(ORIGIN)?;
-    (path.starts_with("/market/") || path.starts_with("/trades/")).then_some(path)
+    path.starts_with("/market/").then_some(path)
 }
 
 fn history_kind(method: &str, path: &str) -> Option<&'static str> {
@@ -38,11 +39,7 @@ fn history_kind(method: &str, path: &str) -> Option<&'static str> {
         return None;
     }
     let base = path.split(['?', '#']).next().unwrap_or(path);
-    match base {
-        "/trades/history" => Some("trades"),
-        "/market/history" => Some("sales"),
-        _ => None,
-    }
+    (base == "/market/history").then_some("sales")
 }
 
 wrap_dev_tools_message_observer! {
