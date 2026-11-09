@@ -7,7 +7,6 @@ GitHub: https://github.com/NullDev
 Imprint : https://kute.lol/imprint.html
 
 ```
-NullDev e.U.
 Christopher Binder
 Bergmanngasse 61a, TOP 4
 8010 Graz, Austria
