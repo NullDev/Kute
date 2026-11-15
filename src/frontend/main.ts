@@ -164,10 +164,11 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/managers/index");
         import("./modules/withdrawn");
         import("./modules/autoDetect/index");
-        if (kute?.settings?.data?.clanColors !== false && kute?.settings?.data?.disableOnlineFeatures !== true) import("./modules/clanColors");
+        const { data } = kute.settings;
+        if (data.clanColors !== false && data.disableOnlineFeatures !== true) import("./modules/clanColors");
         import("./modules/badges");
         import("./modules/externalQueue");
-        const performanceMode = kute.settings.data.performanceMode === true;
+        const performanceMode = data.performanceMode === true;
         if (!performanceMode) import("./modules/bpClaimAll");
         import("./modules/args");
         import("./modules/fixes");
@@ -186,26 +187,26 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/kuteIcons/index");
         import("./modules/menuTimer");
         import("./modules/hudEditor/index");
-        if (kute?.settings?.data?.hsSound) import("./modules/hsSound");
-        if (kute?.settings?.data?.betterChat) import("./modules/betterChat");
-        if (kute?.settings?.data?.chatLogs) import("./modules/chatLogs");
+        if (data.hsSound) import("./modules/hsSound");
+        if (data.betterChat) import("./modules/betterChat");
+        if (data.chatLogs) import("./modules/chatLogs");
         import("./modules/modDownload");
         import("./modules/serverPings");
-        if (kute?.settings?.data?.rankedAlert) import("./modules/rankedAlert");
-        if (kute?.settings?.data?.hpEnemyCounter) import("./modules/hpEnemyCounter");
-        if (kute?.settings?.data?.accountManager) import("./modules/accountManager");
-        if (kute?.settings?.data?.market !== false && kute?.settings?.data?.disableOnlineFeatures !== true) import("./modules/market/index").catch(() => {});
-        if (kute?.settings?.data?.showPing) import("./modules/showPing");
-        if (kute?.settings?.data?.realPing) import("./modules/realPing");
-        if (kute?.settings?.data?.exitButton) getElement("#clientExit").style.display = "flex";
+        if (data.rankedAlert) import("./modules/rankedAlert");
+        if (data.hpEnemyCounter) import("./modules/hpEnemyCounter");
+        if (data.accountManager) import("./modules/accountManager");
+        if (data.market !== false && data.disableOnlineFeatures !== true) import("./modules/market/index").catch(() => {});
+        if (data.showPing) import("./modules/showPing");
+        if (data.realPing) import("./modules/realPing");
+        if (data.exitButton) getElement("#clientExit").style.display = "flex";
         import("./modules/renderFps");
-        if (kute?.settings?.data?.spotifyOverlay && kute.hostFeatures?.includes("spotify")) import("./modules/spotifyOverlay");
-        if (kute?.settings?.data?.motionBlur) import("./modules/motionBlur");
-        if (kute?.settings?.data?.keystrokes) import("./modules/keystrokes");
+        if (data.spotifyOverlay && kute.hostFeatures?.includes("spotify")) import("./modules/spotifyOverlay");
+        if (data.motionBlur) import("./modules/motionBlur");
+        if (data.keystrokes) import("./modules/keystrokes");
         if (kute.hostFeatures?.includes("custom-sky")) import("./modules/customSky");
         if (kute.hostFeatures?.includes("appimage-update")) import("./modules/linuxUpdate").catch(() => {});
 
-        if (kute?.settings?.data?.rampBoost && !checkCompMode()){
+        if (data.rampBoost && !checkCompMode()){
             setRampBoost(true);
 
             const gameUpdateListener = (event: MessageEvent): void => {
@@ -222,10 +223,10 @@ Object.defineProperty(window, "gameLoaded", {
             window.chrome.webview.addEventListener("message", gameUpdateListener);
         }
 
-        if (kute?.settings.data?.hideBundles){
+        if (data.hideBundles){
             const origBundlePopup = window.bundlePopup;
             window.bundlePopup = (...args): void => {
-                const windowHolder = document.querySelector("#windowHolder") as HTMLElement|null;
+                const windowHolder = document.querySelector("#windowHolder") as HTMLElement | null;
                 if (
                     windowHolder &&
                     windowHolder.style.display !== "none" &&
@@ -237,12 +238,12 @@ Object.defineProperty(window, "gameLoaded", {
         }
 
         setTimeout(() => {
-            if (sessionStorage.getItem("justLaunched") === "true" && kute?.launchArgs){
+            if (sessionStorage.getItem("justLaunched") === "true" && kute.launchArgs){
                 kute.parseArgs(kute.launchArgs);
             }
         }, 2000);
 
-        if (kute?.settings.data?.autoSpec){
+        if (data.autoSpec){
             let tries = 0;
             const trySetSpect = (): void => {
                 const activity = window.getGameActivity();
@@ -255,7 +256,7 @@ Object.defineProperty(window, "gameLoaded", {
             trySetSpect();
         }
 
-        if (kute?.settings.data?.discordRPC){
+        if (data.discordRPC){
             window.chrome.webview.addEventListener("message", (event) => {
                 if (event.data !== "game-updated") return;
                 setTimeout(() => {
@@ -265,7 +266,7 @@ Object.defineProperty(window, "gameLoaded", {
             });
         }
 
-        if (kute?.settings.data?.textSelect){
+        if (data.textSelect){
             const textSelectCSS = document.createElement("style");
             textSelectCSS.id = "kute_textSelectCSS";
             textSelectCSS.textContent = "#chatHolder * { user-select: text }";

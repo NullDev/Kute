@@ -1,4 +1,4 @@
-export const hook = (target: { prototype: Record<string, any>; }, method: string, wrapper: (this: any, args: any[], original: Function) => any): void => {
+export const hook = (target: { prototype: Record<string, any> }, method: string, wrapper: (this: any, args: any[], original: Function) => any): void => {
     const original = target.prototype[method];
     target.prototype[method] = function(this: any, ...args: any[]): any{
         const result = wrapper.call(this, args, original);
@@ -39,12 +39,7 @@ export const getElement = <T extends Element = HTMLElement>(selector: string, ro
 
 export const getInput = (selector: string, root: ParentNode = document): HTMLInputElement => getElement(selector, root);
 
-export const checkCompMode = (): boolean => {
-    if (document.querySelector(".cmpTmHed")){
-        return true;
-    }
-    return false;
-};
+export const checkCompMode = (): boolean => document.querySelector(".cmpTmHed") !== null;
 
 export function request(message: string, key: string, timeoutMs = 2000): Promise<any>{
     return new Promise((resolve) => {
