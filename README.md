@@ -69,6 +69,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left), can keep searching until one opens up, moves on when the lobby it picked is full, skips the lobbies you were in last and collects double XP and rewards when a match ends
 - [x] Better chat
 - [x] Chat logs: the last 2000 chat lines, kept across lobbies, to filter, search and copy (F1, rebindable)
+- [x] Blocked message warning: Krunker silently drops chat messages with certain words (known so far: "null" and "client"). Kute shows a red note in place of the message nobody else received
 - [x] Hardpoint enemy counter
 - [x] Nuke counter: your career nuke total in game, with an optional goal
 - [x] Keystrokes: your bound movement keys and mouse in the HUD, lit while pressed, with a ring that shows which way the mouse moves
