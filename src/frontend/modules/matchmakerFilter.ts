@@ -41,6 +41,8 @@ export interface MatchmakerFilter {
     serverBrowser: boolean;
     animation: boolean;
     searchAfterMatch: boolean;
+    collectRewards: boolean;
+    keepSearching: boolean;
 }
 
 export const DEFAULT_FILTER: MatchmakerFilter = {
@@ -56,6 +58,8 @@ export const DEFAULT_FILTER: MatchmakerFilter = {
     serverBrowser: true,
     animation: true,
     searchAfterMatch: false,
+    collectRewards: true,
+    keepSearching: false,
 };
 
 export interface Lobby {
