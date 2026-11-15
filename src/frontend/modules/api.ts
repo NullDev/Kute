@@ -60,7 +60,7 @@ class Api {
         return data;
     }
 
-    async requestStatus(path: string, init: RequestInit = {}): Promise<{ status: number; data: any; error?: any; retryAt?: number; }>{
+    async requestStatus(path: string, init: RequestInit = {}): Promise<{ status: number, data: any, error?: any, retryAt?: number }>{
         if (!await this.available() || this.down || this.offline()) return { status: 0, data: null };
         try {
             const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);

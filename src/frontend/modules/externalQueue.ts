@@ -30,7 +30,7 @@ function openExtQueue(): void{
     const windowHeight = 350;
     const left = (screenWidth - windowWidth) / 2;
     const top = (screenHeight - windowHeight) / 2;
-    const queueWindow: (Window & { info?: { allRegions: boolean; token: string; region: string; sound: string; fallbackSound: string; volume: () => number; maps: Record<string, { url: string; number: number; }>; }; }) | null = window.open(
+    const queueWindow: (Window & { info?: { allRegions: boolean, token: string, region: string, sound: string, fallbackSound: string, volume: () => number, maps: Record<string, { url: string, number: number }> } }) | null = window.open(
         "about:blank",
         "_blank",
         `width=${windowWidth},height=${windowHeight},left=${left},top=${top}`,

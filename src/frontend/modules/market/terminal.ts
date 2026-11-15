@@ -19,13 +19,13 @@ const SCALES = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 const MIN_WIDTH = 480;
 const MIN_HEIGHT = 360;
 
-type SearchState = {q:string, rarity:string, type:string, sort:string, page:number, budget:string, minSales:string};
+type SearchState = { q: string, rarity: string, type: string, sort: string, page: number, budget: string, minSales: string };
 
-type ItemState = {skin:number, range:string};
+type ItemState = { skin: number, range: string };
 
-type Layout = {width:number, height:number, scale:number, maximized:boolean};
+type Layout = { width: number, height: number, scale: number, maximized: boolean };
 
-export type View = {html:string, asOf?:number, asOfLabel?:string, points?:ChartPoint[], series?:Series[], chartOptions?:ChartOptions, item?:ItemPage, listings?:ListingsReply|null, exportText?:string};
+export type View = { html: string, asOf?: number, asOfLabel?: string, points?: ChartPoint[], series?: Series[], chartOptions?: ChartOptions, item?: ItemPage, listings?: ListingsReply | null, exportText?: string };
 
 const defaultSearch = (): SearchState => ({ q: "", rarity: "", type: "", sort: "sales", page: 1, budget: "", minSales: "" });
 
@@ -39,7 +39,7 @@ export class Terminal {
     arg: unknown = undefined;
     generation = 0;
     view: View | null = null;
-    saved: Map<string, { arg: unknown; scroll: number; }> = new Map();
+    saved: Map<string, { arg: unknown, scroll: number }> = new Map();
     previous = "search";
     itemSearch: ItemSearch | null = null;
     layout: Layout = { width: 0, height: 0, scale: 1, maximized: false };
@@ -170,7 +170,7 @@ export class Terminal {
                 if (document.pointerLockElement) this.close();
             }, { signal });
             document.addEventListener("keydown", (event) => this.key(event), { signal, capture: true });
-            (this.shadow.querySelector("#kmGlobalSearch") as HTMLInputElement|null)?.focus();
+            (this.shadow.querySelector("#kmGlobalSearch") as HTMLInputElement | null)?.focus();
         }
         await this.show(tab ?? this.tab, arg);
     }
@@ -197,7 +197,7 @@ export class Terminal {
     }
 
     value(selector: string): string{
-        return (this.shadow?.querySelector(selector) as HTMLInputElement|HTMLSelectElement|null)?.value ?? "";
+        return (this.shadow?.querySelector(selector) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "";
     }
 
     searchState(): SearchState{
@@ -224,7 +224,7 @@ export class Terminal {
         body.setAttribute("aria-busy", "true");
         body.innerHTML = empty("Loading", "Fetching what is on file.");
         const title = this.shadow.querySelector("#kmTitle");
-        if (title) title.textContent = TITLES[(tab as keyof typeof TITLES)] ?? "Item Stats";
+        if (title) title.textContent = TITLES[tab as keyof typeof TITLES] ?? "Item Stats";
         const nav = tab === "item" ? this.previous : tab;
         for (const el of this.shadow.querySelectorAll("[data-nav]")){
             const active = (el as HTMLElement).dataset.nav === nav;
@@ -241,7 +241,7 @@ export class Terminal {
             if (keepScroll) body.scrollTop = previousScroll;
             const foot = this.shadow.querySelector("#kmFootRight");
             if (foot) foot.textContent = view.asOf ? `${view.asOfLabel ?? "Facts updated"} ${formatAge(Math.max(0, Date.now() - view.asOf))} ago` : "What the game reported and what Kute saw listed";
-            const host = body.querySelector(".chart") as HTMLElement|null;
+            const host = body.querySelector(".chart") as HTMLElement | null;
             if (host && view.points && view.series) this.chart = new MarketChart(host, view.points, view.series, view.chartOptions);
         }
         catch {
@@ -313,8 +313,8 @@ export class Terminal {
     }
 
     openSheet(mode: "import" | "export"): void{
-        const sheet = this.shadow?.querySelector("#kmPricesSheet") as HTMLElement|null;
-        const text = this.shadow?.querySelector("#kmPricesText") as HTMLTextAreaElement|null;
+        const sheet = this.shadow?.querySelector("#kmPricesSheet") as HTMLElement | null;
+        const text = this.shadow?.querySelector("#kmPricesText") as HTMLTextAreaElement | null;
         const title = this.shadow?.querySelector("#kmPricesSheetTitle");
         if (!sheet || !text) return;
         sheet.hidden = false;
@@ -369,7 +369,7 @@ export class Terminal {
     }
 
     click(event: Event): void{
-        const el = event.target instanceof Element ? (event.target.closest("button,tr[data-skin]") as HTMLElement|null) : null;
+        const el = event.target instanceof Element ? (event.target.closest("button,tr[data-skin]") as HTMLElement | null) : null;
         if (!el || el.hasAttribute("disabled")) return;
         const d = el.dataset;
         if (el.id === "kmClose"){
@@ -445,7 +445,7 @@ export class Terminal {
                 this.openSheet("export");
                 break;
             case "prices-copy": {
-                const text = this.shadow?.querySelector("#kmPricesText") as HTMLTextAreaElement|null;
+                const text = this.shadow?.querySelector("#kmPricesText") as HTMLTextAreaElement | null;
                 text?.select();
                 if (text) navigator.clipboard?.writeText(text.value).then(() => this.status("Copied to the clipboard.")).catch(() => this.status("Select the text and copy it."));
                 break;
@@ -454,7 +454,7 @@ export class Terminal {
                 void this.importPrices();
                 break;
             case "prices-close": {
-                const sheet = this.shadow?.querySelector("#kmPricesSheet") as HTMLElement|null;
+                const sheet = this.shadow?.querySelector("#kmPricesSheet") as HTMLElement | null;
                 if (sheet) sheet.hidden = true;
                 break;
             }
@@ -512,7 +512,7 @@ export class Terminal {
             this.rescale({ "-": -1, 0: 0 }[event.key] ?? 1);
             return;
         }
-        const active = this.shadow.activeElement as HTMLElement|null;
+        const active = this.shadow.activeElement as HTMLElement | null;
         if (event.key === "Enter" && active){
             if (active.closest("#kmFilters")){
                 event.preventDefault();
@@ -525,8 +525,8 @@ export class Terminal {
         }
         if (event.key !== "Tab") return;
         const focusable = [...this.shadow.querySelectorAll("button:not(:disabled):not([tabindex='-1']),input:not([type=hidden]),select,textarea,summary,[tabindex='0']")].filter((e) => e instanceof HTMLElement && e.getClientRects().length && !e.closest("[hidden]"));
-        const first = focusable[0] as HTMLElement|undefined;
-        const last = focusable.at(-1) as HTMLElement|undefined;
+        const first = focusable[0] as HTMLElement | undefined;
+        const last = focusable.at(-1) as HTMLElement | undefined;
         if (event.shiftKey && (active === first || !active)){
             event.preventDefault();
             last?.focus();

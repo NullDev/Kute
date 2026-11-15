@@ -45,7 +45,7 @@ export async function itemView(desk: Terminal): Promise<View>{
         html:
             html`
                 <button class="textButton" data-action="back">
-                    &#8592; Back to ${esc(TITLES[(desk.previous as keyof typeof TITLES)] ?? "Search")}
+                    &#8592; Back to ${esc(TITLES[desk.previous as keyof typeof TITLES] ?? "Search")}
                 </button>
                 <div class="itemHero">
                     <div class="itemArt">

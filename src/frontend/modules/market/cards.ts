@@ -14,7 +14,7 @@ const PICK_MS = 5000;
 class Cards {
     timer: number | undefined = undefined;
     busy = false;
-    pick: { skin: number; name: string; at: number; } | null = null;
+    pick: { skin: number, name: string, at: number } | null = null;
     onPick = (event: Event): void => {
         if (document.pointerLockElement || !(event.target instanceof Element)) return;
         const node = event.target.closest("[id^='trd_'], .trade-inv-item[data-index]");

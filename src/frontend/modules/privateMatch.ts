@@ -4,7 +4,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => {
     setTimeout(resolve, ms);
 });
 
-export function activity(): Partial<KrunkerGameActivity> & { id?: string; }{
+export function activity(): Partial<KrunkerGameActivity> & { id?: string }{
     try {
         return window.getGameActivity?.() ?? {};
     }
@@ -27,7 +27,7 @@ export async function hostLobby(): Promise<string | null>{
         window.windows[7]?.switchTab?.(0);
         await sleep(300);
         const maps = [...document.querySelectorAll("#windowHolder input[id^=gameMap]")] as HTMLInputElement[];
-        const makePrivate = document.querySelector("#makePrivate") as HTMLInputElement|null;
+        const makePrivate = document.querySelector("#makePrivate") as HTMLInputElement | null;
         if (maps.length === 0 || !makePrivate){
             window.closWind?.();
             return null;

@@ -3,42 +3,42 @@ export const TARGET_REFRESH_MULTIPLE = 3;
 export const CLOCK_MS = 0.1;
 
 export interface Reading {
-    fps: number|null;
-    p50?: number|null;
-    p99: number|null;
-    maxMs: number|null;
-    stallMs: number|null;
-    taskP99: number|null;
-    inputP99: number|null;
-    presentMs?: number|null;
+    fps: number | null;
+    p50?: number | null;
+    p99: number | null;
+    maxMs: number | null;
+    stallMs: number | null;
+    taskP99: number | null;
+    inputP99: number | null;
+    presentMs?: number | null;
     invalid?: boolean;
     why?: string;
-    load?: Load|null;
+    load?: Load | null;
 }
 
 export interface Load {
-    cpuSpeed: number|null;
-    cpuBusy: number|null;
-    cpuLimit: number|null;
-    thermalLimit: number|null;
-    temperature: number|null;
-    gpu: Record<string, {render: number, copy: number}>;
-    nvidia?: {clockMhz: number|null, temperature: number|null, heldBack: number|null}[]|null;
+    cpuSpeed: number | null;
+    cpuBusy: number | null;
+    cpuLimit: number | null;
+    thermalLimit: number | null;
+    temperature: number | null;
+    gpu: Record<string, { render: number, copy: number }>;
+    nvidia?: { clockMhz: number | null, temperature: number | null, heldBack: number | null }[] | null;
 }
 
-export type Metric = "fps"|"p99"|"maxMs"|"stallMs"|"taskP99"|"inputP99";
+export type Metric = "fps" | "p99" | "maxMs" | "stallMs" | "taskP99" | "inputP99";
 
 interface MetricSummary {
     n: number;
-    median: number|null;
-    spread: number|null;
-    worst?: number|null;
-    best?: number|null;
+    median: number | null;
+    spread: number | null;
+    worst?: number | null;
+    best?: number | null;
 }
 
 export type Summary = Record<Metric, MetricSummary>;
 
-type Verdict = "better"|"worse"|"same"|"unknown";
+type Verdict = "better" | "worse" | "same" | "unknown";
 
 export const EXPERIENCE = ["taskP99", "inputP99", "p99", "stallMs", "maxMs"] as Metric[];
 const ALL_METRICS: Metric[] = [...EXPERIENCE, "fps"];
@@ -127,19 +127,19 @@ interface Judged {
     summary: Summary;
     verdicts: Partial<Record<Metric, Verdict>>;
     rejected: boolean;
-    decidedBy: Metric|null;
+    decidedBy: Metric | null;
 }
 
 interface Choice {
     winner: string;
     changed: boolean;
     inconclusive: boolean;
-    decidedBy: Metric|null;
+    decidedBy: Metric | null;
     incumbent: Summary;
     judged: Judged[];
 }
 
-export function choose(incumbent: Candidate, candidates: Candidate[], options: { fpsCounts?: boolean; } = {}): Choice{
+export function choose(incumbent: Candidate, candidates: Candidate[], options: { fpsCounts?: boolean } = {}): Choice{
     const base = summarize(incumbent.readings);
     const judged: Judged[] = candidates.map((candidate) => {
         const summary = summarize(candidate.readings);
@@ -186,7 +186,7 @@ export function steadyRungs(hz: number): number[]{
     return Array.from({ length: TARGET_REFRESH_MULTIPLE + 1 }, (_, index) => (index + 1) * hz);
 }
 
-export function steadyLimit(hz: number, readings: Map<number, Reading[]>): { cap: number | null; steadyUpTo: number | null; }{
+export function steadyLimit(hz: number, readings: Map<number, Reading[]>): { cap: number | null, steadyUpTo: number | null }{
     let cap: number | null = null;
     let steadyUpTo: number | null = null;
     for (const rung of steadyRungs(hz)){
@@ -220,20 +220,20 @@ function floorAtLimit(metric: Metric): number{
 interface CapJudged {
     cap: number;
     summary: Summary;
-    frameMs: number|null;
-    netMs: number|null;
-    gains?: {task: number, input: number|null};
-    outcome: "yours"|"better"|"not better"|"worse"|"not steady";
+    frameMs: number | null;
+    netMs: number | null;
+    gains?: { task: number, input: number | null };
+    outcome: "yours" | "better" | "not better" | "worse" | "not steady";
 }
 
 interface CapChoice {
     winner: number;
     changed: boolean;
-    decidedBy: "net"|"tie"|null;
+    decidedBy: "net" | "tie" | null;
     judged: CapJudged[];
 }
 
-export function chooseCap(readings: Map<number, Reading[]>, incumbent: number, options: { prefer?: number; inputRequired?: boolean; trade?: boolean; } = {}): CapChoice{
+export function chooseCap(readings: Map<number, Reading[]>, incumbent: number, options: { prefer?: number, inputRequired?: boolean, trade?: boolean } = {}): CapChoice{
     const summaryOf = (cap: number): Summary => summarize((readings.get(cap) ?? []).map(atLimit));
     const frameOf = (cap: number): number | null => {
         const frames = (readings.get(cap) ?? []).filter((reading) => !reading.invalid).map((reading) => reading.p50).filter((value) => typeof value === "number");
@@ -282,11 +282,11 @@ export function chooseCap(readings: Map<number, Reading[]>, incumbent: number, o
 
 interface Acceptance {
     keep: boolean;
-    failed: "reference"|"result"|"unsteady"|"frame"|Metric|null;
-    traded?: {task: number, input: number};
+    failed: "reference" | "result" | "unsteady" | "frame" | Metric | null;
+    traded?: { task: number, input: number };
 }
 
-export function accept(reference: Reading[], result: Reading[], { capBefore, capAfter, trade = false }: { capBefore: number; capAfter: number; trade?: boolean; }): Acceptance{
+export function accept(reference: Reading[], result: Reading[], { capBefore, capAfter, trade = false }: { capBefore: number, capAfter: number, trade?: boolean }): Acceptance{
     const usable = (readings: Reading[]): Reading[] => readings.filter((reading) => !reading.invalid);
     if (usable(reference).length < 2) return { keep: false, failed: "reference" };
     if (usable(result).length < 2) return { keep: false, failed: "result" };
@@ -332,7 +332,7 @@ export function experienceHolds(summary: Summary, hz: number): boolean{
     return (p99 === null || p99 <= refreshMs) && (stall === null || stall <= refreshMs);
 }
 
-export function capCandidates({ hz, capacity, current }: { hz: number; capacity: number | null; current: number; }): number[]{
+export function capCandidates({ hz, capacity, current }: { hz: number, capacity: number | null, current: number }): number[]{
     const reachable = (cap: number): boolean => capacity === null || cap <= capacity;
     const caps = [TARGET_REFRESH_MULTIPLE * hz, 2 * hz, hz].filter(reachable);
     if (capacity !== null) caps.push(Math.round(capacity * 0.9));

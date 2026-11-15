@@ -1,7 +1,7 @@
 import cSettings from "../cSettings.json";
 
 export const PERFORMANCE_VALUES: Record<string, boolean | null> = Object.fromEntries(
-    Object.values(cSettings as Record<string, {id: string, performance?: boolean|null}>)
+    Object.values(cSettings as Record<string, { id: string, performance?: boolean | null }>)
         .filter((setting) => setting.performance !== undefined)
         .map((setting) => [setting.id, setting.performance ?? null]),
 );

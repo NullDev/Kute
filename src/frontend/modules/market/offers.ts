@@ -10,9 +10,9 @@ const SPACING_MS = 2000;
 const REFRESH_MS = 10 * 60 * 1000;
 const KEEP = 200;
 
-type Offer = {give:Entry[], get:Entry[], giveKr:number, getKr:number, unvalued:string[], key:string};
+type Offer = { give: Entry[], get: Entry[], giveKr: number, getKr: number, unvalued: string[], key: string };
 
-type Result = {give:Entry[]|null, get:Entry[]|null, facts:Record<string, SkinFacts>, message:string, at:number};
+type Result = { give: Entry[] | null, get: Entry[] | null, facts: Record<string, SkinFacts>, message: string, at: number };
 
 class TradeOffers {
     timer: number | undefined = undefined;

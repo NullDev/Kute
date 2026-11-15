@@ -10,11 +10,11 @@ interface SpotifyState {
     duration: number;
 }
 
-type SpotifySong = SpotifyState & {title: string, artist: string, album: string, artwork: string|null};
+type SpotifySong = SpotifyState & { title: string, artist: string, album: string, artwork: string | null };
 
 class SpotifyOverlay {
     overlay: HTMLElement | null = null;
-    playback: (SpotifyState & { at: number; }) | null = null;
+    playback: (SpotifyState & { at: number }) | null = null;
     timer: number | null = null;
     artwork: string | null = null;
     listener = (event: MessageEvent): void => {
@@ -81,7 +81,7 @@ class SpotifyOverlay {
     }
 
     drawProgress(): void{
-        const bar = (this.overlay?.querySelector("#kuteSpotifyProgress > div") ?? null) as HTMLElement|null;
+        const bar = (this.overlay?.querySelector("#kuteSpotifyProgress > div") ?? null) as HTMLElement | null;
         if (!bar || !this.playback) return;
         const { playing, position, duration, at } = this.playback;
         const now = position + (playing ? performance.now() - at : 0);

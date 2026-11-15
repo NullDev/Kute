@@ -11,7 +11,7 @@ function semverCompare(a: string, b: string): number{
 
 const REPO_API = "https://api.github.com/repos/NullDev/Kute";
 
-type Release = {tag: string, body: string, date: string};
+type Release = { tag: string, body: string, date: string };
 
 const releaseCache: Map<number, Promise<Release | null>> = new Map();
 let releaseCount: number | null = null;
@@ -83,7 +83,7 @@ async function positionOf(version: string): Promise<number>{
         while (container.firstChild) shadow.append(container.firstChild);
 
         const element = (id: string): HTMLElement | null => shadow.getElementById(id);
-        const logoImage = element("changelogLogo") as HTMLImageElement|null;
+        const logoImage = element("changelogLogo") as HTMLImageElement | null;
         if (logoImage) logoImage.src = logo.default;
         const content = element("changelogContent");
         if (content) content.textContent = "Loading release notes...";

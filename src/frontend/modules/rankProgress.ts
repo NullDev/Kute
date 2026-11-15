@@ -2,7 +2,7 @@ import { getElement } from "../utils";
 
 interface Rank {
     rank: string;
-    elo: number|null;
+    elo: number | null;
     color: string;
     image: string;
 }
@@ -117,8 +117,8 @@ class RankProgress {
     }
 
     checkForMenu(): void{
-        const card = document.querySelector(".rank-card") as HTMLElement|null;
-        const container = document.querySelector(".rank-and-stats") as HTMLElement|null;
+        const card = document.querySelector(".rank-card") as HTMLElement | null;
+        const container = document.querySelector(".rank-and-stats") as HTMLElement | null;
 
         if (card && container){
             if (!container.querySelector("#kute-elo-tracker")) this.injectBar(container);
@@ -177,7 +177,7 @@ class RankProgress {
         document.body.appendChild(overlay);
     }
 
-    getRankData(currentElo: number): { currentRank: Rank; nextRank: Rank; progress: number; isMax: boolean; }{
+    getRankData(currentElo: number): { currentRank: Rank, nextRank: Rank, progress: number, isMax: boolean }{
         const currentRankIndex = this.ranks.findLastIndex((r) => r.elo !== null && currentElo >= r.elo);
         const currentRank = this.ranks[currentRankIndex];
         const nextRank = this.ranks[currentRankIndex + 1] || currentRank;

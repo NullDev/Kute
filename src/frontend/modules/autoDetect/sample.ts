@@ -30,7 +30,7 @@ export function takeInputDiagnostics(): InputDiagnostics{
     return taken;
 }
 
-export function takeReading({ ms, hz, replay }: { ms: number; hz: number; replay: boolean; }): Promise<Reading>{
+export function takeReading({ ms, hz, replay }: { ms: number, hz: number, replay: boolean }): Promise<Reading>{
     return new Promise((resolve, reject) => {
         const frames = new FrameRecorder();
         const tasks = new TaskProbe();

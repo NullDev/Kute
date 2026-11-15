@@ -1,11 +1,11 @@
 import { esc, money } from "./presentation";
 import { lineSegments } from "./chartData";
 
-export type ChartPoint = {t:number, values:(number|null)[], volume?:number|null};
+export type ChartPoint = { t: number, values: (number | null)[], volume?: number | null };
 
-export type Series = {label:string, color:string};
+export type Series = { label: string, color: string };
 
-export type ChartOptions = {volume?:boolean, stepMs?:number};
+export type ChartOptions = { volume?: boolean, stepMs?: number };
 
 export default class MarketChart {
     host: HTMLElement;

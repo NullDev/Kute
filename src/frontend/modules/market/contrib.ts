@@ -26,6 +26,8 @@ function loadSent(): Set<string>{
     }
 }
 
+type Capture = { method?: unknown, path?: unknown, request?: any, data?: any };
+
 class Contributions {
     running = false;
     generation = 0;
@@ -36,7 +38,7 @@ class Contributions {
     sent = loadSent();
     timer: number | undefined = undefined;
     controller: AbortController | null = null;
-    listings: Map<number, { skin: number; price: number; }> = new Map();
+    listings: Map<number, { skin: number, price: number }> = new Map();
     seen: Set<number> = new Set();
     listener = (event: MessageEvent): void => this.receive(event);
 
@@ -80,7 +82,7 @@ class Contributions {
     }
 
     receive(event: MessageEvent): void{
-        let message: { marketHistory?: { kind?: unknown; data?: unknown; }; marketCapture?: { method?: unknown; path?: unknown; request?: any; data?: any; }; } | null = null;
+        let message: { marketHistory?: { kind?: unknown, data?: unknown }, marketCapture?: Capture } | null = null;
         try { message = typeof event.data === "string" ? JSON.parse(event.data) : event.data; }
         catch { return; }
         if (kute.hostFeatures?.includes("market-capture")){
@@ -91,7 +93,7 @@ class Contributions {
         if (history?.kind === "sales") this.capture(history.data);
     }
 
-    captured(reply: { method?: unknown; path?: unknown; request?: any; data?: any; }): void{
+    captured(reply: Capture): void{
         if (typeof reply.path !== "string" || reply.data?.error) return;
         const path = reply.path.split(/[?#]/)[0];
         const data = reply.data?.data;

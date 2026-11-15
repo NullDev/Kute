@@ -93,7 +93,7 @@ export class InputProbe {
         window.addEventListener("pointermove", this.onMove, { capture: true, passive: true });
     }
 
-    stop(): { events: number; packets: number; p99: number | null; max: number | null; }{
+    stop(): { events: number, packets: number, p99: number | null, max: number | null }{
         window.removeEventListener("pointermove", this.onMove, true);
         const stored = Math.min(this.events, this.waits.length);
         const sorted = this.waits.slice(0, stored).sort();
@@ -130,7 +130,7 @@ export class TaskProbe {
         }, 10);
     }
 
-    stop(): { sent: number; ran: number; p99: number | null; max: number | null; }{
+    stop(): { sent: number, ran: number, p99: number | null, max: number | null }{
         clearInterval(this.timer);
         const sorted = [...this.delays].sort((a, b) => a - b);
         return {

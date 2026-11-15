@@ -17,7 +17,7 @@ interface CompHostParams {
 const automateCompHost = async(params: CompHostParams): Promise<void> => {
     window.openHostWindow(false, 1);
     await waitForElement(".hostTb0");
-    let mapCheckbox = document.querySelector(`#${params.mapId}`) as HTMLInputElement|null;
+    let mapCheckbox = document.querySelector(`#${params.mapId}`) as HTMLInputElement | null;
 
     if (!mapCheckbox){
         const allMapNameElements = document.querySelectorAll(".hostMap .hostMapName") as NodeListOf<HTMLElement>;
@@ -25,7 +25,7 @@ const automateCompHost = async(params: CompHostParams): Promise<void> => {
             (el) => el.innerText.trim().toLowerCase() === params.mapId.toLowerCase(),
         );
         if (targetNameElement){
-            mapCheckbox = (targetNameElement.parentElement?.querySelector('input[type="checkbox"]') ?? null) as HTMLInputElement|null;
+            mapCheckbox = (targetNameElement.parentElement?.querySelector('input[type="checkbox"]') ?? null) as HTMLInputElement | null;
         }
     }
 
@@ -125,7 +125,7 @@ const changeRegion = async(region: string): Promise<void> => {
 
     window.showWindow(1);
 
-    const selectRoot = document.querySelector("select.inputGrey2") as HTMLSelectElement|null;
+    const selectRoot = document.querySelector("select.inputGrey2") as HTMLSelectElement | null;
     if (!selectRoot){
         if (typeof window.setSetting === "function"){
             window.setSetting("defaultRegion", normalizedRegion);

@@ -42,7 +42,7 @@ function run(): void{
     scene.resize(window.innerWidth * devicePixelRatio, window.innerHeight * devicePixelRatio);
 
     const phases = caps.length > 0 ? Array.from({ length: Math.max(1, rounds) }, () => caps).flat() : [null];
-    const samples: { cap: number; stats: FrameStats | null; otherTasks: ReturnType<TaskProbe["stop"]>; }[] = [];
+    const samples: { cap: number, stats: FrameStats | null, otherTasks: ReturnType<TaskProbe["stop"]> }[] = [];
     let phase = 0;
     let phaseStart = performance.now();
     let recorder: FrameRecorder | null = null;

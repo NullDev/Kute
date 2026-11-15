@@ -7,7 +7,9 @@ import type { SkinFacts } from "./types";
 
 const POLL_MS = 1200;
 
-type Snapshot = {give:Entry[], get:Entry[], giveKr:number, getKr:number, anchor:Element, slot?:HTMLElement|null, key:string};
+type Resolved = { give: Entry[], get: Entry[], facts: Record<string, SkinFacts> };
+
+type Snapshot = { give: Entry[], get: Entry[], giveKr: number, getKr: number, anchor: Element, slot?: HTMLElement | null, key: string };
 
 class TradeWindows {
     timer: number | undefined = undefined;
@@ -17,7 +19,7 @@ class TradeWindows {
     generation = 0;
     busy = false;
     expanded = false;
-    resolved: { give: Entry[]; get: Entry[]; facts: Record<string, SkinFacts>; } | null = null;
+    resolved: Resolved | null = null;
     resolvedKey = "";
     dismiss = (event: Event): void => {
         const details = this.box?.shadowRoot?.querySelector("details");
@@ -180,7 +182,7 @@ class TradeWindows {
         }
     }
 
-    render(snapshot: Snapshot, resolved: { give: Entry[]; get: Entry[]; facts: Record<string, SkinFacts>; } | null, fallback: string): void{
+    render(snapshot: Snapshot, resolved: Resolved | null, fallback: string): void{
         if (!this.box){
             this.box = document.createElement("div");
             this.box.className = "kuteTradeBox";

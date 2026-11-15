@@ -1,7 +1,7 @@
 export interface HidingSetting {
     id: string;
     name: string;
-    kind: "checkbox"|"opacity";
+    kind: "checkbox" | "opacity";
 }
 
 export interface IconSlot {

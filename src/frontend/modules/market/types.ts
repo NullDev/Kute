@@ -3,47 +3,47 @@ export interface SkinFacts {
     name: string;
     rarity: number;
     type: number;
-    season: number|null;
-    thumbnail: string|null;
+    season: number | null;
+    thumbnail: string | null;
     tradable: boolean;
-    lowest: number|null;
-    highest: number|null;
+    lowest: number | null;
+    highest: number | null;
     listed: number;
     onS: number;
     inC: number;
-    krunker: number|null;
+    krunker: number | null;
     floor: number;
     sales7d: number;
     sales30d: number;
     sales90d: number;
-    avg30d: number|null;
-    lastSaleDay: string|null;
-    lastSaleAvg: number|null;
-    lastSoldPrice: number|null;
-    lastSoldAt: number|null;
+    avg30d: number | null;
+    lastSaleDay: string | null;
+    lastSaleAvg: number | null;
+    lastSoldPrice: number | null;
+    lastSoldAt: number | null;
     sold30d: number;
-    bookAt: number|null;
-    statsAt: number|null;
+    bookAt: number | null;
+    statsAt: number | null;
     asOf: number;
 }
 
-export type SearchReply = {total: number, page: number, perPage: number, items: SkinFacts[], asOf: number};
+export type SearchReply = { total: number, page: number, perPage: number, items: SkinFacts[], asOf: number };
 
-type SoldRow = {price: number, at: number, wear: number|null, serial: number|null};
+type SoldRow = { price: number, at: number, wear: number | null, serial: number | null };
 
-type Supply = {inC: number, onS: number, top1Share: number|null, top10Share: number|null, top100Share: number|null, topOwners: {name: string, count: number}[], at: number|null};
+type Supply = { inC: number, onS: number, top1Share: number | null, top10Share: number | null, top100Share: number | null, topOwners: { name: string, count: number }[], at: number | null };
 
-export type ItemPage = {skin: SkinFacts & {stackable: boolean|null, wearable: boolean|null, limType: string|null, noSpin: boolean}, sold: SoldRow[], supply: Supply|null, historySince: string|null, asOf: number};
+export type ItemPage = { skin: SkinFacts & { stackable: boolean | null, wearable: boolean | null, limType: string | null, noSpin: boolean }, sold: SoldRow[], supply: Supply | null, historySince: string | null, asOf: number };
 
-type HistoryPoint = {t: number, lowest: number|null, median: number|null, sales: number, volume: number, avg: number|null, salesObserved: boolean, krunker: number|null, onS: number|null, ask?: {open:number, high:number, low:number, close:number, samples:number}|null};
+type HistoryPoint = { t: number, lowest: number | null, median: number | null, sales: number, volume: number, avg: number | null, salesObserved: boolean, krunker: number | null, onS: number | null, ask?: { open: number, high: number, low: number, close: number, samples: number } | null };
 
-type HistoryReply = {skin: number, range: string, resolution: "hour"|"day", points: HistoryPoint[], asOf: number};
+type HistoryReply = { skin: number, range: string, resolution: "hour" | "day", points: HistoryPoint[], asOf: number };
 
-type ListingRow = {uid: number, price: number, listedAt: number|null, ageMs: number|null, seller: string|null, sellerListings: number, wear: number|null, serial: number|null};
+type ListingRow = { uid: number, price: number, listedAt: number | null, ageMs: number | null, seller: string | null, sellerListings: number, wear: number | null, serial: number | null };
 
-export type ListingsReply = {skin: number, total: number, listings: ListingRow[], asOf: number, observedAt: number|null, observedTotal: number, highest: number|null};
+export type ListingsReply = { skin: number, total: number, listings: ListingRow[], asOf: number, observedAt: number | null, observedTotal: number, highest: number | null };
 
-export type ItemDeskReply = {item: ItemPage, history: HistoryReply|null, listings: ListingsReply|null};
+export type ItemDeskReply = { item: ItemPage, history: HistoryReply | null, listings: ListingsReply | null };
 
 
 export const RARITIES = [

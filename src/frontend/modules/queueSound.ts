@@ -29,7 +29,7 @@ function ask<T>(message: string, pick: (data: any) => T | undefined): Promise<T 
 
 export const kuteSound = (): Promise<string> => import("../components/queue/match-found.ogg").then((module) => module.default);
 
-const readSound = (name: string): Promise<{ data?: string; error?: string; } | null> => ask(`sound-get ${JSON.stringify({ name })}`, (data) => (data?.sound?.name === name ? data.sound : undefined));
+const readSound = (name: string): Promise<{ data?: string, error?: string } | null> => ask(`sound-get ${JSON.stringify({ name })}`, (data) => (data?.sound?.name === name ? data.sound : undefined));
 
 export async function chosenSound(): Promise<string>{
     const name = String(kute.settings.data.queueSoundFile ?? KUTE_SOUND);

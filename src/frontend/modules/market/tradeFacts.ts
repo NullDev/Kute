@@ -2,13 +2,13 @@ import { formatKr, formatWhen, type SkinFacts } from "./types";
 import { esc, money } from "./presentation";
 import { readPrices } from "./prices";
 
-export type Entry = {skin:number, count:number, serial?:number, wear?:number, style?:number, path?:string};
+export type Entry = { skin: number, count: number, serial?: number, wear?: number, style?: number, path?: string };
 
-type Line = {entry:Entry, facts:SkinFacts|null, own:number|null};
+type Line = { entry: Entry, facts: SkinFacts | null, own: number | null };
 
-export type Side = {lines:Line[], kr:number, items:number, priced:number, total:number|null};
+export type Side = { lines: Line[], kr: number, items: number, priced: number, total: number | null };
 
-export async function resolveEntries(entries: Entry[], lookup: (paths: string[]) => Promise<Record<string, { skin: number; }>>): Promise<Entry[] | null>{
+export async function resolveEntries(entries: Entry[], lookup: (paths: string[]) => Promise<Record<string, { skin: number }>>): Promise<Entry[] | null>{
     const paths = entries.filter((e) => e.skin < 0 && e.path).map((e) => (e.path as string));
     const byPath = paths.length ? await lookup(paths) : {};
     const out = entries.map(({ path, ...entry }) => ({ ...entry, skin: entry.skin < 0 ? byPath[path ?? ""]?.skin ?? -1 : entry.skin }));

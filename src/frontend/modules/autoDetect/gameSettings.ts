@@ -1,7 +1,7 @@
 interface GameSetting {
     id: string;
     label: string;
-    cheap: string|boolean;
+    cheap: string | boolean;
     needsReload?: boolean;
     fightOnly?: boolean;
 }

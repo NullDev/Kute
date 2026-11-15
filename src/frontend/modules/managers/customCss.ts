@@ -15,7 +15,7 @@ const cssName = (name: string): string => (/\.css$/i.test(name) ? name : `${name
 const STORE_BASE = "https://raw.githubusercontent.com/kute-client/kute-css-store/main/";
 const STORE_TIMEOUT = 8000;
 
-type StoreItem = {name: string, author: string, file: string, preview: string};
+type StoreItem = { name: string, author: string, file: string, preview: string };
 
 const storePath = (path: unknown): path is string => typeof path === "string" && path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
 
@@ -34,7 +34,7 @@ const storeItem = (entry: any): StoreItem | null => {
 
 const post = (command: string, payload?: object): void => window.chrome.webview.postMessage(payload ? `css-${command} ${JSON.stringify(payload)}` : `css-${command}`);
 
-type CssFile = {name: string, size: number};
+type CssFile = { name: string, size: number };
 
 class CssManager {
     popup: ManagerPopup | null = null;
@@ -46,7 +46,7 @@ class CssManager {
     listed = false;
     saving: string | null = null;
     savingName: string | null = null;
-    renaming: { from: string; to: string; } | null = null;
+    renaming: { from: string, to: string } | null = null;
     openAfterImport: string | null = null;
     activating = false;
     closeAfterSave = false;
@@ -281,7 +281,7 @@ class CssManager {
         }
     }
 
-    updateList(list: { files?: CssFile[]; active?: string | null; }): void{
+    updateList(list: { files?: CssFile[], active?: string | null }): void{
         this.files = Array.isArray(list.files) ? list.files : [];
         const wasActive = this.active;
         this.active = list.active ?? null;
@@ -483,7 +483,7 @@ class CssManager {
         if (skipped.length) this.popup?.showError(`Not imported (only .css files up to 4 MB): ${skipped.join(", ")}`);
     }
 
-    imported(result: { requested: string; name: string; error?: string | null; }): void{
+    imported(result: { requested: string, name: string, error?: string | null }): void{
         if (this.downloading.delete(result.requested)) this.refreshStore();
         if (result.error){
             this.popup?.showError(`Could not add ${result.requested}: ${result.error}`);

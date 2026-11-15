@@ -134,7 +134,7 @@ class KuteIcons {
         element("kiHint").textContent = hint;
 
         let changed = false;
-        const rows: { slot: IconSlot; box: HTMLInputElement; note: HTMLElement; }[] = [];
+        const rows: { slot: IconSlot, box: HTMLInputElement, note: HTMLElement }[] = [];
 
         const renderNotes = (): void => {
             for (const { slot, box, note } of rows){

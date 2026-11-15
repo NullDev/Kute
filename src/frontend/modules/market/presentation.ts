@@ -24,7 +24,7 @@ export const soldMonth = (f: SkinFacts | null | undefined): string => {
     return `${f.sales30d} <small>${f.sales30d === 1 ? "sale" : "sales"} / 30D</small>`;
 };
 
-export const identity = (item: { thumbnail?: string | null; name: string; rarity?: number; }): string => `<span class="itemIdentity">${item.thumbnail ? `<img src="${esc(item.thumbnail)}" loading="lazy" alt="">` : "<span class=\"itemPlaceholder\">K</span>"}<span><b>${esc(item.name)}</b><small>${esc(RARITIES[item.rarity ?? -1]?.name ?? "Item")}</small></span></span>`;
+export const identity = (item: { thumbnail?: string | null, name: string, rarity?: number }): string => `<span class="itemIdentity">${item.thumbnail ? `<img src="${esc(item.thumbnail)}" loading="lazy" alt="">` : "<span class=\"itemPlaceholder\">K</span>"}<span><b>${esc(item.name)}</b><small>${esc(RARITIES[item.rarity ?? -1]?.name ?? "Item")}</small></span></span>`;
 
 export const empty = (title: string, description: string, action = ""): string => `<div class="empty"><span class="emptyMark">&#9671;</span><h2>${esc(title)}</h2><p>${esc(description)}</p>${action}</div>`;
 

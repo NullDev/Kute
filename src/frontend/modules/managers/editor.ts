@@ -9,7 +9,7 @@ const escapeHtml = (text: string): string => text.replaceAll("&", "&amp;").repla
 
 const CSS_TOKENS = /(\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)|(@[\w-]+|!\s*important\b)|(#[\da-fA-F]{3,8}\b|-?(?:\d*\.)?\d+(?:e[+-]?\d+)?(?:%|[a-zA-Z]+)?)|(-?-?[a-zA-Z_][\w-]*)/g;
 
-type Language = "js"|"json"|"css"|"text";
+type Language = "js" | "json" | "css" | "text";
 
 export const languageFor = (path: string): Language => {
     const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
@@ -67,7 +67,7 @@ export interface CodeEditor {
     focus: () => void;
 }
 
-export function createCodeEditor(container: HTMLElement, content: string, { onSave, onDirtyChange, onChange, language = "js" }: { onSave: () => void; onDirtyChange: (dirty: boolean) => void; onChange?: (value: string) => void; language?: Language; }): CodeEditor{
+export function createCodeEditor(container: HTMLElement, content: string, { onSave, onDirtyChange, onChange, language = "js" }: { onSave: () => void, onDirtyChange: (dirty: boolean) => void, onChange?: (value: string) => void, language?: Language }): CodeEditor{
     container.innerHTML = `<div class="editor"><div class="editorGutter"></div><div class="editorCode"><pre><code></code></pre>
         <textarea spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea></div></div>`;
     const gutter = container.querySelector(".editorGutter") as HTMLElement;
@@ -178,7 +178,7 @@ const element = (tag: string, className: string, text = ""): HTMLElement => {
     return created;
 };
 
-export function createEditorView(parent: HTMLElement, { title, content, language, isNew = false, onSave, onClose, onChange }: { title: string; content: string; language: Language; isNew?: boolean; onSave: (closeAfter: boolean) => void; onClose: () => void; onChange?: (value: string) => void; }): EditorView{
+export function createEditorView(parent: HTMLElement, { title, content, language, isNew = false, onSave, onClose, onChange }: { title: string, content: string, language: Language, isNew?: boolean, onSave: (closeAfter: boolean) => void, onClose: () => void, onChange?: (value: string) => void }): EditorView{
     parent.textContent = "";
     const view = element("div", "editorView");
     const bar = element("div", "editorBar");

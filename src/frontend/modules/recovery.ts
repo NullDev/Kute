@@ -26,7 +26,7 @@ class Recovery {
             this.shadow.innerHTML = html;
             document.body.append(this.host);
         }
-        const { shadow } = this as {shadow: ShadowRoot};
+        const { shadow } = this as { shadow: ShadowRoot };
         (shadow.querySelector("#rcTitle") as HTMLElement).textContent = title;
         (shadow.querySelector("#rcBody") as HTMLElement).textContent = body;
         const row = shadow.querySelector("#rcActions") as HTMLElement;

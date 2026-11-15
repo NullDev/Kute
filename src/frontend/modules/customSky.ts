@@ -1,7 +1,7 @@
 import { kute } from "../client";
 
 interface CustomSkyConfig {
-    mode: "gradient"|"image";
+    mode: "gradient" | "image";
     zenith: string;
     horizon: string;
     image: string;
@@ -43,7 +43,7 @@ class CustomSky {
         window.chrome.webview.postMessage(`set-config-json customSkyConfig ${JSON.stringify(config)}`);
     }
 
-    listImages(): Promise<{ files: string[]; presets: string[]; }>{
+    listImages(): Promise<{ files: string[], presets: string[] }>{
         return new Promise((resolve) => {
             let timeout = 0;
             const listener = (event: MessageEvent): void => {

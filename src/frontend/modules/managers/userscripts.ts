@@ -68,7 +68,7 @@ class UserscriptManager {
     openSettings: Set<string> = new Set();
     editing: OpenEditor | null = null;
     pendingRead: string | null = null;
-    pendingSave: { closeAfter: boolean; } | null = null;
+    pendingSave: { closeAfter: boolean } | null = null;
     needsRefresh = false;
     renderQueued = false;
     forceClose = false;
@@ -207,7 +207,7 @@ class UserscriptManager {
     }
 
     updateNotice(): void{
-        const notice = this.popup?.shadow.querySelector("#usRefresh") as HTMLElement|null;
+        const notice = this.popup?.shadow.querySelector("#usRefresh") as HTMLElement | null;
         if (!notice) return;
         const on = this.masterOn();
         const stuck = registry?.entries?.some((entry) => entry.outdated || (!on && entry.state === "running"));

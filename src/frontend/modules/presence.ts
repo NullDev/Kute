@@ -28,7 +28,7 @@ export async function playerHash(game: string, name: string): Promise<string>{
     return Array.from(digest.subarray(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function devProof(nonce: string, game: string, hash: string): Promise<{ user: string; proof: string; } | null>{
+function devProof(nonce: string, game: string, hash: string): Promise<{ user: string, proof: string } | null>{
     return new Promise((resolve) => {
         let timer = 0;
         const listener = (event: MessageEvent): void => {

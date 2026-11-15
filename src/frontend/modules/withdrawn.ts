@@ -9,7 +9,7 @@ const pending = WITHDRAWN.filter((script) => !done.split(",").includes(script.ke
 
 if (pending.length > 0){
     let timeout = 0;
-    const listener: (event: { data: any; }) => void = (event): void => {
+    const listener: (event: { data: any }) => void = (event): void => {
         const groups = event.data?.userscripts?.groups;
         if (!Array.isArray(groups)) return;
         window.chrome.webview.removeEventListener("message", listener);

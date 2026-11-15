@@ -1,7 +1,7 @@
 const KEY = "kute_market_watch";
 const MAX_ITEMS = 100;
 
-type WatchItem = {skin:number, name:string, rarity?:number, thumbnail:string|null, target:number|null};
+type WatchItem = { skin: number, name: string, rarity?: number, thumbnail: string | null, target: number | null };
 
 export function readWatchlist(): WatchItem[]{
     try {
@@ -30,7 +30,7 @@ export function saveWatchlist(items: WatchItem[]): boolean{
     }
 }
 
-export function toggleWatch(item: { skin: number; name: string; rarity?: number; thumbnail: string | null; }): boolean{
+export function toggleWatch(item: { skin: number, name: string, rarity?: number, thumbnail: string | null }): boolean{
     const items = readWatchlist();
     const exists = items.some((i) => i.skin === item.skin);
     if (!exists && items.length >= MAX_ITEMS) return false;

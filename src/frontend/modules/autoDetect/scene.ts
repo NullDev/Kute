@@ -99,7 +99,7 @@ function link(gl: WebGL2RenderingContext, vertexSource: string, fragmentSource: 
     return program;
 }
 
-function sphere(segments: number): { positions: Float32Array; indices: Uint16Array; }{
+function sphere(segments: number): { positions: Float32Array, indices: Uint16Array }{
     const positions = [];
     const indices = [];
     for (let y = 0; y <= segments; y++){

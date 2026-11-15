@@ -341,7 +341,7 @@ class Matchmaker {
 
         const element = (id: string): HTMLInputElement => (shadow.querySelector(`#${id}`) as HTMLInputElement);
 
-        const chips = (gridId: string, items: { value: string; label: string; icon?: string | null; }[], picked: string[]): void => {
+        const chips = (gridId: string, items: { value: string, label: string, icon?: string | null }[], picked: string[]): void => {
             const grid = element(gridId);
             grid.replaceChildren();
             for (const item of items){
@@ -374,7 +374,7 @@ class Matchmaker {
             picked: string[];
             preferred: string[];
             label: (value: string) => string;
-            icon: (value: string) => string|null;
+            icon: (value: string) => string | null;
         }
 
         const chipIcon = (url: string | null, chip: HTMLElement, lazy: boolean): void => {
@@ -403,7 +403,7 @@ class Matchmaker {
                 chipIcon(group.icon(value), chip, false);
                 chip.append(group.label(value));
 
-                let drag: { x: number; y: number; moved: boolean; } | null = null;
+                let drag: { x: number, y: number, moved: boolean } | null = null;
                 chip.onpointerdown = (event): void => {
                     chip.setPointerCapture(event.pointerId);
                     drag = { x: event.clientX, y: event.clientY, moved: false };

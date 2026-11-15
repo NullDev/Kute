@@ -15,7 +15,7 @@ const REPORT_EVERY = 2 * 3_600_000;
 class WatchAlerts {
     timer = 0;
     busy = false;
-    seen: Map<number, { target: number; reached: boolean; }> = new Map();
+    seen: Map<number, { target: number, reached: boolean }> = new Map();
     unread: Set<number>;
     onChange: () => void;
 
@@ -57,7 +57,7 @@ class WatchAlerts {
         if (!this.active()) return;
         const skins = readWatchlist().map((w) => w.skin).sort((a, b) => a - b);
         const key = skins.join(",");
-        let last: { key?: string; at?: number; } = {};
+        let last: { key?: string, at?: number } = {};
         try { last = JSON.parse(localStorage.getItem(REPORT_KEY) ?? "{}") ?? {}; }
         catch {}
         if (last.key === key && Date.now() - (last.at ?? 0) < REPORT_EVERY) return;

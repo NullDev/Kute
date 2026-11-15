@@ -78,7 +78,7 @@ class Market {
     }
 
     updateBadge(): void{
-        const badge = this.headerItem.querySelector(".nav-badge") as HTMLElement|null;
+        const badge = this.headerItem.querySelector(".nav-badge") as HTMLElement | null;
         if (!badge) return;
         const count = alerts.unread.size;
         badge.textContent = String(Math.min(99, count));

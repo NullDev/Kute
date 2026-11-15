@@ -2,7 +2,7 @@ const SEND_WINDOW_MS = 250;
 
 class ChatDraft {
     tracked: WeakSet<HTMLTextAreaElement> = new WeakSet();
-    draft: { input: HTMLTextAreaElement; friend: string; text: string; start: number; end: number; } | null = null;
+    draft: { input: HTMLTextAreaElement, friend: string, text: string, start: number, end: number } | null = null;
     observer: MutationObserver | null = null;
     pending: ReturnType<typeof setTimeout> | null = null;
     sentAt = 0;

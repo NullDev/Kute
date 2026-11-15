@@ -9,7 +9,7 @@ export interface MeasuredSetting {
     label: string;
     current: string;
     cheap: string;
-    gain: number|null;
+    gain: number | null;
     steady: boolean;
     note?: string;
     raw?: number[];
@@ -19,7 +19,7 @@ export interface MeasuredSetting {
 interface Change {
     id: string;
     label: string;
-    value: string|number|boolean;
+    value: string | number | boolean;
     reason: string;
 }
 
@@ -27,13 +27,13 @@ export interface QualityPlan {
     target: number;
     needed: number;
     holds: boolean;
-    regime: "cpu"|"gpu"|"unknown";
+    regime: "cpu" | "gpu" | "unknown";
     predictedFps: number;
     tuneResolution: boolean;
     changes: Change[];
 }
 
-export function decide({ capacity, hz, headroom, halfResolutionGain, settings }: { capacity: number; hz: number; headroom: number; halfResolutionGain: number | null; settings: MeasuredSetting[]; }): QualityPlan{
+export function decide({ capacity, hz, headroom, halfResolutionGain, settings }: { capacity: number, hz: number, headroom: number, halfResolutionGain: number | null, settings: MeasuredSetting[] }): QualityPlan{
     const target = hz * TARGET_REFRESH_MULTIPLE;
     const needed = target * headroom;
     const holds = capacity >= needed;

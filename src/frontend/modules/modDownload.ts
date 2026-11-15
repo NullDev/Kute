@@ -9,7 +9,7 @@ const FEATURED_STYLE = "position:absolute;right:30px;bottom:92px;box-sizing:cont
 const FEATURED_ICON_STYLE = "font-size:32px;color:#fff;vertical-align:top;margin-top:-3px;margin-left:5px;";
 const STATE_COLOR = { busy: "#777", done: "#35e0e8", failed: "#ff7a7a" };
 
-function parseLoad(onclick: string): { name: string; url: string; } | null{
+function parseLoad(onclick: string): { name: string, url: string } | null{
     const match = /loadUserMod\(\s*(["`])(.*?)\1\s*,\s*(["`])(.*?)\3/.exec(onclick);
     return match ? { name: match[2], url: match[4] } : null;
 }

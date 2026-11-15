@@ -7,14 +7,14 @@ const SESSION_HEADER = "x-kute-session";
 const ATTEST_TIMEOUT_MS = 3000;
 const SESSION_MARGIN_MS = 60 * 60 * 1000;
 
-type StoredSession = {session: string, expiresAt: number};
+type StoredSession = { session: string, expiresAt: number };
 
-type AttestReply = {marketAttest?: {challenge: string, sig: string|null, version: string, loggedIn: boolean, keyed: boolean}};
+type AttestReply = { marketAttest?: { challenge: string, sig: string | null, version: string, loggedIn: boolean, keyed: boolean } };
 
 class MarketApi {
     sessionPromise: Promise<string | null> | null = null;
     memorySession: StoredSession | null = null;
-    cache: Map<string, { at: number; ttl: number; value: Promise<any>; }> = new Map();
+    cache: Map<string, { at: number, ttl: number, value: Promise<any> }> = new Map();
     lastError = "";
     retryAt = 0;
 
@@ -126,7 +126,7 @@ class MarketApi {
         return (await this.requestStatus(path, init, retried)).data;
     }
 
-    async requestStatus(path: string, init: RequestInit = {}, retried = false): Promise<{ status: number; data: any; retryAt?: number; }>{
+    async requestStatus(path: string, init: RequestInit = {}, retried = false): Promise<{ status: number, data: any, retryAt?: number }>{
         if (Date.now() < this.retryAt) return { status: 429, data: null, retryAt: this.retryAt };
         const session = await this.session();
         if (!session) return { status: 0, data: null };
@@ -202,7 +202,7 @@ class MarketApi {
         return this.request("/market/observe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     }
 
-    watch(skins: number[]): Promise<{ watched: number; } | null>{
+    watch(skins: number[]): Promise<{ watched: number } | null>{
         return this.request("/market/watch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ skins }) });
     }
 }

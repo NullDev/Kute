@@ -58,7 +58,7 @@ class HpEnemyCounter {
         if (!pointCounter) return;
         for (const team of document.querySelectorAll("#tScoreC1, #tScoreC2")){
             if (team && !team.className.includes("you")){
-                const scoreElement = team.nextElementSibling as HTMLElement|null;
+                const scoreElement = team.nextElementSibling as HTMLElement | null;
                 if (!scoreElement) continue;
                 const currentEnemyOBJ = Number.parseInt(scoreElement.textContent ?? "", 10);
                 if (Number.isNaN(currentEnemyOBJ)) continue;

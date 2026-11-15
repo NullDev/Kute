@@ -9,7 +9,7 @@
         maps: Record<string, { url: string, number: number }>;
     }
 
-    const { info } = (window as unknown) as Window & { info: QueueInfo };
+    const { info } = window as unknown as Window & { info: QueueInfo };
 
     function must<T = HTMLElement>(selector: string): T{
         const element = document.querySelector(selector);

@@ -9,7 +9,7 @@ interface SettingOption {
     name: string;
     type: string;
     category: string;
-    defaultValue?: string|number|boolean;
+    defaultValue?: string | number | boolean;
     description?: string;
     needsRestart?: boolean;
     needsRefresh?: boolean;
@@ -20,7 +20,7 @@ interface SettingOption {
     disabledBy?: string;
     hostFeature?: string;
     platforms?: string[];
-    performance?: boolean|null;
+    performance?: boolean | null;
     min?: number;
     max?: number;
     step?: number;
@@ -160,7 +160,7 @@ kute.settings.changeSetting = (id: string, rawValue: string | number | boolean, 
         }
     }
 
-    const sliderInput = document.querySelector(`#slid_input_${id}`) as HTMLInputElement|null;
+    const sliderInput = document.querySelector(`#slid_input_${id}`) as HTMLInputElement | null;
     if (sliderInput && slider){
         sliderInput.value = String(value);
 
@@ -265,7 +265,7 @@ class SettingsManager {
             if (response?.type !== "obs-plugin") return;
             if (!response.ok){
                 kute.settings.data.obsCapturePlugin = false;
-                const checkbox = document.querySelector("#obsCapturePlugin") as HTMLInputElement|null;
+                const checkbox = document.querySelector("#obsCapturePlugin") as HTMLInputElement | null;
                 if (checkbox) checkbox.checked = false;
             }
             kute.showNotification(response.message, false, 5);

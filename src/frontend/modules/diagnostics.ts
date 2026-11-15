@@ -8,7 +8,7 @@ const MAX_HIGHLIGHT_CHARS = 256 * 1024;
 
 interface DiagnosticsEntry {
     name: string;
-    kind: "json"|"text"|"binary";
+    kind: "json" | "text" | "binary";
     note: string;
     bytes: number;
     text?: string;
@@ -26,7 +26,7 @@ function today(): string{
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function webglRenderer(): { vendor: string; renderer: string; } | null{
+function webglRenderer(): { vendor: string, renderer: string } | null{
     const gl = document.createElement("canvas").getContext("webgl2");
     if (!gl) return null;
     const info = gl.getExtension("WEBGL_debug_renderer_info");
@@ -50,7 +50,7 @@ function pagePart(): Record<string, any>{
     catch {
         autodetect = null;
     }
-    let activity: { mode: string; map: string | null; custom: boolean; } | null = null;
+    let activity: { mode: string, map: string | null, custom: boolean } | null = null;
     try {
         const { mode, map, custom } = window.getGameActivity();
         activity = { mode, map, custom };

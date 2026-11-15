@@ -1,6 +1,6 @@
 import { esc } from "./presentation";
 
-type Markup = {html:string};
+type Markup = { html: string };
 
 export const markup = (html: string): Markup => ({ html });
 

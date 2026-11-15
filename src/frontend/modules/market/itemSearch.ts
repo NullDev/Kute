@@ -72,7 +72,7 @@ export default class ItemSearch {
         this.dismiss();
         const q = input.value.trim();
         if (!q) return;
-        const list = this.root.getElementById(`${input.id}List`) as HTMLElement|null;
+        const list = this.root.getElementById(`${input.id}List`) as HTMLElement | null;
         if (!list) return;
         this.input = input;
         this.list = list;

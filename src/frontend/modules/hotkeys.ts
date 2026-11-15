@@ -18,8 +18,8 @@ interface HotkeyAction {
     id: string;
     label: string;
     note?: string;
-    group: "window"|"toggle"|"account";
-    fallback: Binding|null;
+    group: "window" | "toggle" | "account";
+    fallback: Binding | null;
     setting?: string;
     run?: () => void;
 }

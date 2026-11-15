@@ -6,11 +6,11 @@ const READY_KEY = "kute_update_ready";
 const PROGRESS_STEPS = [0.25, 0.5, 0.75];
 
 interface UpdateState {
-    stage: "offer"|"downloading"|"ready"|"failed";
+    stage: "offer" | "downloading" | "ready" | "failed";
     version: string;
     current?: string;
     install?: boolean;
-    size?: number|null;
+    size?: number | null;
     done?: number;
     total?: number;
     error?: string;
@@ -34,7 +34,7 @@ class LinuxUpdate {
         if (kute.platform !== "linux" || !kute.hostFeatures?.includes("appimage-update")) return;
 
         window.chrome.webview.addEventListener("message", (event) => {
-            const update = (event.data as {update?: UpdateState})?.update;
+            const update = (event.data as { update?: UpdateState })?.update;
             if (update && typeof update === "object") this.receive(update).catch(() => {});
         });
         window.chrome.webview.postMessage("update-state");

@@ -10,9 +10,11 @@ type Decorator = (row: Row) => void;
 
 type WalkEnd = (kind: ListKind) => void;
 
+type Watched = { observer: MutationObserver, target: Element, list: string, kind: ListKind };
+
 const CLAN_TAG = /^\s*\[(.+)\]\s*$/;
 
-export function clanTag(nameElement: Element): { span: Element; tag: string; } | null{
+export function clanTag(nameElement: Element): { span: Element, tag: string } | null{
     for (const span of nameElement.children){
         if (span.tagName !== "SPAN") continue;
         const match = CLAN_TAG.exec(span.textContent ?? "");
@@ -42,7 +44,7 @@ function nameOf(nameElement: Element): string{
 
 class PlayerLists {
     decorators: Map<Decorator, WalkEnd | undefined> = new Map();
-    watched: { observer: MutationObserver; target: Element; list: string; kind: ListKind; }[] = [];
+    watched: Watched[] = [];
     timer = 0;
 
     add(decorator: Decorator, onWalkEnd?: WalkEnd): void{
@@ -91,7 +93,7 @@ class PlayerLists {
         for (const entry of this.watched) this.walk(entry);
     }
 
-    walk(entry: { observer: MutationObserver; target: Element; list: string; kind: ListKind; }): void{
+    walk(entry: Watched): void{
         const lists = document.querySelectorAll(`#${entry.list}`);
         if (lists.length > 0){
             for (const list of lists){

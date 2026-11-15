@@ -178,7 +178,7 @@ class Keystrokes {
         if (!this.widget) return;
         this.byCode.clear();
         for (const [id, bind, fallback] of ACTIONS){
-            const element = this.widget.querySelector(`#${id}`) as HTMLElement|null;
+            const element = this.widget.querySelector(`#${id}`) as HTMLElement | null;
             if (!element) continue;
             const codes = boundKeys(bind, fallback);
             element.textContent = codes.length > 0 ? keyLabel(codes[0]) : "";

@@ -151,7 +151,7 @@ class AccountManager {
         const raw = sessionStorage.getItem(SWITCH_KEY);
         if (raw === null) return;
         sessionStorage.removeItem(SWITCH_KEY);
-        let pending: { username?: unknown; at?: unknown; } = {};
+        let pending: { username?: unknown, at?: unknown } = {};
         try {
             pending = JSON.parse(raw) ?? {};
         }

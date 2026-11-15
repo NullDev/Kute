@@ -3,7 +3,7 @@ import { choose, IMPORTANT_SHARE, screen, summarize, TARGET_REFRESH_MULTIPLE, ty
 
 const ALL_SPREADS: Metric[] = ["fps", "taskP99", "p99"];
 
-export const PIPELINE: { setting: string; key: string; label: string; }[] = [
+export const PIPELINE: { setting: string, key: string, label: string }[] = [
     { setting: "hardFlip", key: "hook", label: "DXGI Swapchain Hook" },
     { setting: "patchFramePacing", key: "pacing", label: "Frame Pacing" },
     { setting: "patchCanvasBufferCache", key: "canvas", label: "WebGL Buffer Cache" },
@@ -93,13 +93,13 @@ export interface PipelineRow {
 export interface PipelineSearch {
     winner: Pipeline;
     changed: boolean;
-    decidedBy: Metric|null;
+    decidedBy: Metric | null;
     rows: PipelineRow[];
     common: string;
-    capacity: number|null;
+    capacity: number | null;
 }
 
-export async function searchPipeline({ hz, progress, cancelled }: { hz: number; hybrid: boolean; progress: (text: string, share: number) => void; cancelled: () => boolean; }): Promise<PipelineSearch | null>{
+export async function searchPipeline({ hz, progress, cancelled }: { hz: number, hybrid: boolean, progress: (text: string, share: number) => void, cancelled: () => boolean }): Promise<PipelineSearch | null>{
     const current = currentPipeline();
     progress("Testing the client (1 of 4)", 0);
     const calibration = await matrix([configFor(current, `hz=${hz}`)], PROCESS_TIMEOUT_MS);
@@ -182,7 +182,7 @@ export async function searchPipeline({ hz, progress, cancelled }: { hz: number; 
     };
 }
 
-export async function measureCaps({ pipeline, common, caps, cancelled }: { pipeline: Pipeline; common: string; caps: number[]; cancelled: () => boolean; }): Promise<Map<number, Reading[]> | null>{
+export async function measureCaps({ pipeline, common, caps, cancelled }: { pipeline: Pipeline, common: string, caps: number[], cancelled: () => boolean }): Promise<Map<number, Reading[]> | null>{
     const config = `${configFor(pipeline, common)},caps=${caps.join(".")},rounds=2,ms=${CAP_SAMPLE_MS}`;
     const result = await matrix([config], CAP_CYCLE_TIMEOUT_MS);
     const samples = result?.[0]?.page?.caps;

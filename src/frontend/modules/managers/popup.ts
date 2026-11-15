@@ -55,7 +55,7 @@ export const readBase64 = (file: File): Promise<string> => new Promise((resolve,
     reader.readAsDataURL(file);
 });
 
-export function openManagerPopup(html: string, { onMessage, canClose, onEscape }: { onMessage: (data: any) => void; canClose?: () => boolean; onEscape?: () => boolean; }): ManagerPopup{
+export function openManagerPopup(html: string, { onMessage, canClose, onEscape }: { onMessage: (data: any) => void, canClose?: () => boolean, onEscape?: () => boolean }): ManagerPopup{
     const overlay = document.createElement("div");
     overlay.style.cssText =
         "position:fixed;inset:0;z-index:2147483000;display:flex;justify-content:center;align-items:center;background:rgba(0,0,0,0.75)";
@@ -87,7 +87,7 @@ export function openManagerPopup(html: string, { onMessage, canClose, onEscape }
         (event) => {
             if (event.key !== "Escape") return;
             event.stopPropagation();
-            const cancel = shadow.querySelector(".askBackdrop [data-cancel]") as HTMLElement|null;
+            const cancel = shadow.querySelector(".askBackdrop [data-cancel]") as HTMLElement | null;
             if (cancel) cancel.click();
             else if (!onEscape?.()) close();
         },
@@ -97,7 +97,7 @@ export function openManagerPopup(html: string, { onMessage, canClose, onEscape }
         if (event.target === overlay) close();
     });
 
-    const errorBox = shadow.querySelector("[data-error]") as HTMLElement|null;
+    const errorBox = shadow.querySelector("[data-error]") as HTMLElement | null;
     let errorTimer = 0;
     const showError = (message: string): void => {
         if (!errorBox) return;

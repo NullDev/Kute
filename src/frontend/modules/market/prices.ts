@@ -2,7 +2,7 @@ const KEY = "kute_item_prices";
 const MAX_ITEMS = 500;
 export const CHANGED_EVENT = "kute-item-prices-changed";
 
-type OwnPrice = {name:string, price:number, at:number};
+type OwnPrice = { name: string, price: number, at: number };
 
 export function readPrices(): Record<string, OwnPrice>{
     try {
@@ -38,7 +38,7 @@ export function ownPrice(skin: number): number | null{
     return readPrices()[skin]?.price ?? null;
 }
 
-export function setOwnPrice(item: { skin: number; name: string; }, price: number | null): boolean{
+export function setOwnPrice(item: { skin: number, name: string }, price: number | null): boolean{
     const prices = readPrices();
     if (price === null || !Number.isFinite(price) || price <= 0) delete prices[item.skin];
     else {
@@ -55,7 +55,7 @@ export function exportPrices(prices: Record<string, OwnPrice>): string{
         .join("\n");
 }
 
-type ImportLine = {skin:number|null, name:string, price:number, line:string};
+type ImportLine = { skin: number | null, name: string, price: number, line: string };
 
 export function parsePrices(text: string): ImportLine[]{
     const out: ImportLine[] = [];

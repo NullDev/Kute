@@ -111,7 +111,7 @@ class NukeCounter {
         if (!overlay) return;
         const { goal } = this.config;
         const count = overlay.querySelector(".nukeCount");
-        const goalElement = overlay.querySelector(".nukeGoal") as HTMLElement|null;
+        const goalElement = overlay.querySelector(".nukeGoal") as HTMLElement | null;
         if (count) count.textContent = this.nukes === null ? "—" : format(this.nukes);
         if (goalElement){
             goalElement.style.display = goal > 0 ? "" : "none";
@@ -172,7 +172,7 @@ class NukeCounter {
         }
         if (this.nukes === null && !this.noStat && Date.now() - this.lastTry > RETRY_MS) this.refresh();
 
-        const endUI = document.querySelector("#endUI") as HTMLElement|null;
+        const endUI = document.querySelector("#endUI") as HTMLElement | null;
         const endIsUp = !!endUI && endUI.style.display !== "none";
         if (endIsUp && !this.endWasUp && this.commitTimers.length === 0){
             this.commitTimers = COMMIT_DELAYS.map((delay, index) => setTimeout(() => {

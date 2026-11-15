@@ -20,7 +20,7 @@ interface Item {
     w: number;
     h: number;
     empty: boolean;
-    drawn: DOMRect|null;
+    drawn: DOMRect | null;
 }
 
 export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise<void>{
@@ -39,7 +39,7 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
     overlay.id = "kuteHudEditor";
     document.body.append(overlay);
 
-    const boxFor = (def: HudElement, rect: [number, number, number, number, number]): { x: number; y: number; w: number; h: number; empty: boolean; } => {
+    const boxFor = (def: HudElement, rect: [number, number, number, number, number]): { x: number, y: number, w: number, h: number, empty: boolean } => {
         const [rx, ry, rw, rh, visible] = rect;
         const empty = !visible || rw <= 0 || rh <= 0;
         const oversizeX = rw > window.innerWidth * 0.5;
@@ -178,7 +178,7 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
             const scale = place?.s ?? 1;
             const changed = !!place && ((place.x ?? 0) !== 0 || (place.y ?? 0) !== 0 || scale !== 1);
             row.classList.toggle("hpChanged", changed);
-            const moved = row.querySelector(".hpMoved") as HTMLElement|null;
+            const moved = row.querySelector(".hpMoved") as HTMLElement | null;
             if (moved) moved.textContent = scale === 1 ? "" : `${Math.round(scale * 100)}%`;
             const check = panelChecks.get(item.def.key);
             if (check) check.checked = shown(item.def);
@@ -211,8 +211,8 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
             horizontals.push(other.drawn.top, other.drawn.top + other.drawn.height / 2, other.drawn.bottom);
         }
 
-        let bestX: { delta: number; at: number; } | null = null;
-        let bestY: { delta: number; at: number; } | null = null;
+        let bestX: { delta: number, at: number } | null = null;
+        let bestY: { delta: number, at: number } | null = null;
         for (const edge of [start.left + dx, start.left + dx + start.width / 2, start.right + dx]){
             for (const target of verticals){
                 const delta = target - edge;
@@ -236,7 +236,7 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
 
     for (const item of items){
         const { box } = item;
-        let drag: { x: number; y: number; rect: DOMRect; from: HudPlacement; } | null = null;
+        let drag: { x: number, y: number, rect: DOMRect, from: HudPlacement } | null = null;
 
         box.onpointerdown = (event): void => {
             event.preventDefault();
@@ -295,7 +295,7 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
             window.chrome.webview.postMessage(`set-config, ${id}, ${value}`);
             const toggleName = `toggle${id.charAt(0).toUpperCase()}${id.slice(1)}` as const;
             if (typeof kute.settings[toggleName] === "function") kute.settings[toggleName](value);
-            const input = document.querySelector(`#${id}`) as HTMLInputElement|null;
+            const input = document.querySelector(`#${id}`) as HTMLInputElement | null;
             if (input) input.checked = value;
         }
         drawAll();
@@ -356,7 +356,7 @@ export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise
 
     const panel = element("hpPanel");
     const head = element("hpHead");
-    let panelDrag: { x: number; y: number; } | null = null;
+    let panelDrag: { x: number, y: number } | null = null;
     head.onpointerdown = (event): void => {
         const rect = host.getBoundingClientRect();
         host.style.cssText = `position:fixed;left:${Math.round(rect.left)}px;top:${Math.round(rect.top)}px`;

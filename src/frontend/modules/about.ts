@@ -25,7 +25,7 @@ async function showAboutPopup(): Promise<void>{
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = html.default;
 
-    const logoElement = shadow.querySelector("#aboutLogo") as HTMLImageElement|null;
+    const logoElement = shadow.querySelector("#aboutLogo") as HTMLImageElement | null;
     if (logoElement) logoElement.src = logo.default;
     const version = shadow.querySelector("#aboutVersion");
     if (version) version.textContent = `Version ${kute.version}`;

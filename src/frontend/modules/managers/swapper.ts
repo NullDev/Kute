@@ -52,7 +52,7 @@ const baseName = (path: string): string => path.slice(path.lastIndexOf("/") + 1)
 
 const dirName = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
-const buildTree = (files: { path: string; size: number; }[], dirs: string[]): TreeFolder => {
+const buildTree = (files: { path: string, size: number }[], dirs: string[]): TreeFolder => {
     const root: TreeFolder = { name: "", path: "", folders: new Map(), files: [] };
     const folderFor = (path: string): TreeFolder => {
         let node = root;
@@ -82,7 +82,7 @@ class SwapperManager {
     touched: Set<string> = new Set();
     stale: Set<string> = new Set();
     uploadDone: ((error: string | null) => void) | null = null;
-    editing: { path: string; editor: CodeEditor; closeAfterSave: boolean; } | null = null;
+    editing: { path: string, editor: CodeEditor, closeAfterSave: boolean } | null = null;
     pendingRead: string | null = null;
     saving = false;
     forceClose = false;
@@ -163,7 +163,7 @@ class SwapperManager {
         await this.upload([{ path: gamePath, file }]);
     }
 
-    async upload(files: { path: string; file: File; }[]): Promise<void>{
+    async upload(files: { path: string, file: File }[]): Promise<void>{
         const problems: string[] = [];
         for (const { path, file } of files){
             if (!this.popup) return;
@@ -302,7 +302,7 @@ class SwapperManager {
         return row;
     }
 
-    ownFileRow(file: { name: string; path: string; size: number; }, depth: number, seen: Map<string, string>, byName: Map<string, string[]>): HTMLElement{
+    ownFileRow(file: { name: string, path: string, size: number }, depth: number, seen: Map<string, string>, byName: Map<string, string[]>): HTMLElement{
         const row = element("div", "node");
         row.style.setProperty("--depth", String(depth + 1));
         row.append(element("span", "mi", "description"), element("span", "nodeName", file.name), element("span", "nodeSize", formatSize(file.size)));

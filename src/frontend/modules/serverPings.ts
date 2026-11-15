@@ -83,7 +83,7 @@ class ServerPings {
     }
 
     sortRegions(holder: HTMLElement): void{
-        const blocks: { nodes: Element[]; ping: number; }[] = [];
+        const blocks: { nodes: Element[], ping: number }[] = [];
         for (const child of holder.children){
             if (child.classList.contains("setHed")){
                 const name = Array.from(child.childNodes, (node) => (node.nodeType === Node.TEXT_NODE ? node.textContent : "")).join("").trim();

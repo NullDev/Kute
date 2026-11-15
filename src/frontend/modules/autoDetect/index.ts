@@ -37,10 +37,10 @@ const WORSE: Record<string, string> = {
 
 interface CapRow {
     cap: number;
-    where: "client test"|"test match";
+    where: "client test" | "test match";
     summary: MetricSummary;
-    frameMs: number|null;
-    netMs: number|null;
+    frameMs: number | null;
+    netMs: number | null;
     outcome: string;
     readings?: Reading[];
 }
@@ -51,32 +51,32 @@ interface Report {
     cpu: string;
     hz: number;
     laptop: boolean;
-    hybrid: boolean|null;
-    powerOverlay: string|null;
+    hybrid: boolean | null;
+    powerOverlay: string | null;
     capacity: number;
-    pushed?: {stoodStill: number, steadyUpTo: number|null, limit: number|null};
+    pushed?: { stoodStill: number, steadyUpTo: number | null, limit: number | null };
     unlimited?: Reading[];
     played?: Reading[];
     recheck?: Reading[];
-    trace?: {ms: number, fps: number, load: Load|null}[];
+    trace?: { ms: number, fps: number, load: Load | null }[];
     client?: Record<string, any>;
-    hybridSource?: string|null;
-    adapters?: {render: string|null, display: string|null};
+    hybridSource?: string | null;
+    adapters?: { render: string | null, display: string | null };
     noise: number;
     drift: number;
     headroom: number;
     beforeCap: number;
     before: MetricSummary;
     afterCap: number;
-    after: MetricSummary|null;
+    after: MetricSummary | null;
     pipeline: PipelineRow[];
     caps: CapRow[];
-    halfResolutionGain: number|null;
+    halfResolutionGain: number | null;
     settings: MeasuredSetting[];
     plan: QualityPlan;
     input?: InputDiagnostics;
-    rolledBack: string|null;
-    pipelineRefused?: string|null;
+    rolledBack: string | null;
+    pipelineRefused?: string | null;
     seconds: number;
 }
 
@@ -95,7 +95,7 @@ interface Carry {
     pipelineBefore: Pipeline;
     pipelineAfter: Pipeline;
     pipelineChanged: boolean;
-    decidedBy: Metric|null;
+    decidedBy: Metric | null;
     rows: PipelineRow[];
     benchCaps: CapRow[];
     capOrder: number[];
@@ -105,23 +105,29 @@ interface Carry {
     recheck?: Reading[];
 }
 
+type Snapshot = { client: Record<string, any>, game: Record<string, string | null> };
+
+type DevOverrides = { hz?: number, battery?: boolean, laptop?: boolean, force?: string, collapse?: number };
+
+type Outcome = { summary: Summary, report: Report };
+
 interface RunState {
-    status: "running"|"done"|"prompted";
+    status: "running" | "done" | "prompted";
     at: number;
-    snapshot: {client: Record<string, any>, game: Record<string, string|null>};
-    baseline?: {client: Record<string, any>, game: Record<string, string|null>};
+    snapshot: Snapshot;
+    baseline?: Snapshot;
     carry?: Carry;
     details?: string[];
     summary?: Summary;
     report?: Report;
     showSummary?: boolean;
     undoable?: boolean;
-    previous?: RunState|null;
+    previous?: RunState | null;
     wizard?: WizardStage;
     wizardDetails?: string[];
 }
 
-type WizardStage = "later"|"declined"|"login"|"settings"|"import"|"run";
+type WizardStage = "later" | "declined" | "login" | "settings" | "import" | "run";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -148,7 +154,7 @@ function applyClient(id: string, value: string | number | boolean): void{
     kute.settings.data[id] = value;
     window.chrome.webview.postMessage(`set-config, ${id}, ${value}`);
     for (const selector of [`#${id}`, `#slid_input_${id}`]){
-        const input = document.querySelector(selector) as HTMLInputElement|null;
+        const input = document.querySelector(selector) as HTMLInputElement | null;
         if (!input) continue;
         if (input.type === "checkbox") input.checked = value === true;
         else input.value = String(value);
@@ -162,9 +168,9 @@ function readable(value: string | number | boolean | null | undefined): string{
     return String(value);
 }
 
-function devOverrides(): { hz?: number; battery?: boolean; laptop?: boolean; force?: string; collapse?: number; }{
+function devOverrides(): DevOverrides{
     const match = /--autodetect-dev=(\S+)/.exec(kute.launchArgs ?? "");
-    const overrides: { hz?: number; battery?: boolean; laptop?: boolean; force?: string; collapse?: number; } = {};
+    const overrides: DevOverrides = {};
     for (const part of match?.[1].split(",") ?? []){
         const [key, value] = part.split(":");
         if (key === "hz") overrides.hz = Number(value);
@@ -287,7 +293,7 @@ function outcomeCell(outcome: string, note = ""): string{
     return `<td class="adResult ${tone}">${outcome}${note}</td>`;
 }
 
-function section(title: string, body: string, { wide = false, unit = "" }: { wide?: boolean; unit?: string; } = {}): string{
+function section(title: string, body: string, { wide = false, unit = "" }: { wide?: boolean, unit?: string } = {}): string{
     return `<section class="adCard${wide ? " adSpan" : ""}"><h3>${title}${unit ? `<span class="adUnit">${unit}</span>` : ""}</h3>${body}</section>`;
 }
 
@@ -377,7 +383,7 @@ function advancedHtml(report: Report): string{
         and a setup that measures worse anywhere is never taken.</p><div class="adButton" id="adCopy">Copy this report</div></div>`;
 }
 
-function rankCaps(readings: Map<number, Reading[]>, incumbentCap: number, where: CapRow["where"], prefer?: number, trade = false): { rows: CapRow[]; winner: number; reason: string; order: number[]; }{
+function rankCaps(readings: Map<number, Reading[]>, incumbentCap: number, where: CapRow["where"], prefer?: number, trade = false): { rows: CapRow[], winner: number, reason: string, order: number[] }{
     const choice = chooseCap(readings, incumbentCap, { prefer, inputRequired: where === "test match", trade });
     const rows: CapRow[] = choice.judged.map((entry) => ({ cap: entry.cap, where, summary: entry.summary, frameMs: entry.frameMs, netMs: entry.netMs, outcome: entry.outcome }));
     const won = choice.judged.find((entry) => entry.cap === choice.winner);
@@ -425,7 +431,7 @@ class Panel {
         this.element("adBarFill").style.width = `${Math.round(fraction * 100)}%`;
     }
 
-    choose(title: string, line: string, choices: { label: string; onPick: () => void; cancel?: boolean; }[], note?: string): void{
+    choose(title: string, line: string, choices: { label: string, onPick: () => void, cancel?: boolean }[], note?: string): void{
         const cancel = choices.find((choice) => choice.cancel);
         this.dismissWith(cancel ? (): void => cancel.onPick() : undefined);
         this.element("adTitle").textContent = title;
@@ -447,7 +453,7 @@ class Panel {
         }
     }
 
-    result(summary: Summary, actions: { onUndo?: () => void; onRun?: () => void; report?: Report; } = {}): void{
+    result(summary: Summary, actions: { onUndo?: () => void, onRun?: () => void, report?: Report } = {}): void{
         this.dismissWith(() => this.close());
         this.element("adTitle").textContent = summary.title;
         this.element("adStatus").textContent = summary.line;
@@ -603,14 +609,14 @@ class AutoDetect {
     running = false;
     cancelled = false;
 
-    snapshot(): RunState["snapshot"]{
+    snapshot(): Snapshot{
         return {
             client: Object.fromEntries(CLIENT_KEYS.map((key) => [key, kute.settings.data[key]])),
             game: Object.fromEntries(game.ALL_IDS.map((id) => [id, game.read(id)])),
         };
     }
 
-    restore(snapshot: RunState["snapshot"]): void{
+    restore(snapshot: Snapshot): void{
         game.resetCache();
         for (const [id, value] of Object.entries(snapshot.game)){
             if (value !== null && game.read(id) !== value) game.write(id, value);
@@ -656,7 +662,7 @@ class AutoDetect {
         new Panel().result(state.summary, { onUndo: state.undoable ? (): void => this.undo() : undefined, report: shownReport(state) });
     }
 
-    async start(options: { snapshot?: RunState["snapshot"]; details?: string[]; resume?: RunState; } = {}): Promise<void>{
+    async start(options: { snapshot?: Snapshot, details?: string[], resume?: RunState } = {}): Promise<void>{
         if (this.running) return;
         if (!kute.hostFeatures?.includes(HOST_FEATURE)){
             kute.showNotification("Auto-detect needs a newer Kute, update the client to use it", false, 6);
@@ -761,7 +767,7 @@ class AutoDetect {
         }
     }
 
-    async run(panel: Panel, state: RunState, venue: { inMatch: boolean; }): Promise<{ summary: Summary; report: Report; } | "restarting" | null>{
+    async run(panel: Panel, state: RunState, venue: { inMatch: boolean }): Promise<Outcome | "restarting" | null>{
         const dev = devOverrides();
         const baseline = state.baseline ?? state.snapshot;
         const earlier = state.details ?? [];
@@ -771,10 +777,10 @@ class AutoDetect {
         panel.progress("Reading your hardware", 0.02);
         const specs = await request("get-specs", "specs");
         if (specs === null) throw new Error("this needs a newer version of the client");
-        const displays: { hz: number; hostsWindow: boolean; adapter?: string | null; }[] = specs.displays ?? [];
+        const displays: { hz: number, hostsWindow: boolean, adapter?: string | null }[] = specs.displays ?? [];
         const display = displays.find((entry) => entry.hostsWindow) ?? displays[0];
         const hz = dev.hz ?? (display?.hz > 1 ? display.hz : 60);
-        const gpus: { name: string; software: boolean; vramMb: number; }[] = (specs.gpus ?? []).filter((gpu: { software: boolean; }) => !gpu.software);
+        const gpus: { name: string, software: boolean, vramMb: number }[] = (specs.gpus ?? []).filter((gpu: { software: boolean }) => !gpu.software);
         const gpuName = specs.renderAdapter?.name ?? [...gpus].sort((a, b) => b.vramMb - a.vramMb)[0]?.name ?? "unknown graphics card";
         const onBattery = dev.battery ?? Boolean(specs.onBattery);
         const mobile = dev.laptop ?? (Boolean(specs.laptop) || specs.hybrid === true);
@@ -996,7 +1002,7 @@ class AutoDetect {
             seconds: (performance.now() - started) / 1000,
             ...fields,
         });
-        const rollBack = (why: string, measured: Partial<Report> = {}): { summary: Summary; report: Report; } => {
+        const rollBack = (why: string, measured: Partial<Report> = {}): Outcome => {
             this.restore(state.snapshot);
             const needsRestart = restartNeeded();
             return {
@@ -1154,7 +1160,7 @@ class AutoDetect {
         else if (capacity < needed){
             const replayWorks = run.asPlayed.some((reading) => reading.inputP99 !== null);
             let reference = late?.fps ?? capacity;
-            const measure = async(apply: () => void, revert: () => void): Promise<{ ratio: number; steady: boolean; raw: number[]; }> => {
+            const measure = async(apply: () => void, revert: () => void): Promise<{ ratio: number, steady: boolean, raw: number[] }> => {
                 const first = reference;
                 apply();
                 await sleep(SETTLE_MS);
@@ -1321,7 +1327,7 @@ class AutoDetect {
         };
     }
 
-    remember(wizard: WizardStage, snapshot?: RunState["snapshot"], details?: string[]): void{
+    remember(wizard: WizardStage, snapshot?: Snapshot, details?: string[]): void{
         const state = readState() ?? { status: "prompted" as const, at: Date.now(), snapshot: { client: {}, game: {} } };
         writeState({ ...state, at: Date.now(), wizard, ...(snapshot ? { snapshot } : {}), ...(details ? { wizardDetails: details } : {}) });
     }

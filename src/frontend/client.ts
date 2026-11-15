@@ -15,7 +15,7 @@ export const ready: Promise<Kute> = new Promise((resolve) => {
             window.chrome.webview.removeEventListener("message", handler);
             Object.assign(kute, event.data);
             if (kute.settings?.data){
-                for (const setting of Object.values(cSettings as Record<string, {id: string, defaultValue?: unknown}>)){
+                for (const setting of Object.values(cSettings as Record<string, { id: string, defaultValue?: unknown }>)){
                     if (setting.defaultValue !== undefined && !(setting.id in kute.settings.data)) kute.settings.data[setting.id] = setting.defaultValue;
                 }
             }

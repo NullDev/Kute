@@ -6,9 +6,9 @@ const MAX_ENTRIES = 2000;
 const STORE_KEY = "kute_chat_logs";
 const LTR_MARK = String.fromCharCode(0x200e);
 
-type Category = "player"|"kill"|"event"|"server";
+type Category = "player" | "kill" | "event" | "server";
 
-type Entry = {t: number, cat: Category|"lobby", text: string};
+type Entry = { t: number, cat: Category | "lobby", text: string };
 
 const CATEGORIES: [Category, string][] = [["player", "Players"], ["kill", "Kills"], ["event", "Events"], ["server", "Server"]];
 const ROW_CLASS: Record<string, string> = { player: "", kill: "clKill", event: "clEvent", server: "clServer", lobby: "clLobby" };
@@ -69,7 +69,7 @@ function lobbyName(): string{
 class ChatLogs {
     entries = restore();
     shown: Set<Category>;
-    view: { overlay: HTMLDivElement; shadow: ShadowRoot; list: HTMLElement; search: HTMLInputElement; } | null;
+    view: { overlay: HTMLDivElement, shadow: ShadowRoot, list: HTMLElement, search: HTMLInputElement } | null;
     stick: boolean;
     observer: MutationObserver;
     save: () => void;

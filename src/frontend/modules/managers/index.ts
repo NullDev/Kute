@@ -19,7 +19,7 @@ kute.settings.toggleUserscripts = (on: boolean): void => {
     else if (!kute.userscriptManager.masterChanged) kute.showNotification("Refresh the page to start your userscripts.", false, 5);
     kute.userscriptManager.masterChanged?.(on);
 };
-window.chrome.webview.addEventListener("message", (event: { data: any; }) => {
+window.chrome.webview.addEventListener("message", (event: { data: any }) => {
     const css = event.data?.swapperChanged?.css;
     if (Array.isArray(css) && css.length) reloadStylesheets(new Set(css.map(String)));
 });

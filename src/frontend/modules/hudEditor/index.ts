@@ -105,10 +105,10 @@ export class HudEditor {
     snapshot(): HudGeometry | null{
         if (!this.inMatch()) return null;
 
-        const found: { def: HudElement; element: HTMLElement; visible: boolean; }[] = [];
+        const found: { def: HudElement, element: HTMLElement, visible: boolean }[] = [];
         for (const def of HUD_ELEMENTS){
             if (def.menu) continue;
-            const element = document.querySelector(def.selector) as HTMLElement|null;
+            const element = document.querySelector(def.selector) as HTMLElement | null;
             if (!element) continue;
             found.push({ def, element, visible: window.getComputedStyle(element).display !== "none" });
         }
