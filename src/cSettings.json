@@ -232,6 +232,15 @@
         "button": "Open",
         "buttonAction": "{{kute}}.chatLogs?.open()"
     },
+    "blockedChatWarning": {
+        "name": "Blocked Message Warning",
+        "id": "blockedChatWarning",
+        "performance": false,
+        "description": "Krunker drops chat messages with some words without telling you. Kute shows a red note instead",
+        "type": "checkbox",
+        "category": "Interface",
+        "defaultValue": true
+    },
     "textSelect": {
         "name": "Selectable Chat",
         "id": "textSelect",
