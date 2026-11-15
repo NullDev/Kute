@@ -173,7 +173,6 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/args");
         import("./modules/fixes");
         import("./modules/inventoryScroll");
-        import("./modules/chatDraft");
         if (!performanceMode) import("./modules/versionTag");
         if (!performanceMode) import("./modules/rankProgress");
         import("./modules/importSettings");
