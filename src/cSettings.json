@@ -537,6 +537,16 @@
         "category": "Advanced",
         "defaultValue": 1
     },
+    "disableBundleUpdates": {
+        "name": "Disable Automatic Bundle Updates",
+        "id": "disableBundleUpdates",
+        "description": "Kute stops downloading script fixes from GitHub and runs the scripts built into this version",
+        "type": "checkbox",
+        "category": "Advanced",
+        "defaultValue": false,
+        "needsRestart": true,
+        "hostFeature": "bundle-updates-toggle"
+    },
     "clearCache": {
         "name": "Clear Cache & Storage",
         "id": "clearCache",

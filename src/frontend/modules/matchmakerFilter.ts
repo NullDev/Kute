@@ -41,6 +41,9 @@ export interface MatchmakerFilter {
     serverBrowser: boolean;
     animation: boolean;
     searchAfterMatch: boolean;
+    collectRewards: boolean;
+    keepSearching: boolean;
+    skipRecent: number;
 }
 
 export const DEFAULT_FILTER: MatchmakerFilter = {
@@ -56,7 +59,21 @@ export const DEFAULT_FILTER: MatchmakerFilter = {
     serverBrowser: true,
     animation: true,
     searchAfterMatch: false,
+    collectRewards: true,
+    keepSearching: false,
+    skipRecent: 1,
 };
+
+export const MAX_SKIP_RECENT = 10;
+
+export function rememberLobby(recent: string[], id: string | null): string[]{
+    const known = recent.filter((entry) => typeof entry === "string" && entry !== id);
+    return (id ? [id, ...known] : known).slice(0, MAX_SKIP_RECENT);
+}
+
+export function skippedLobbies(recent: string[], count: number, rejected: string[]): Set<string>{
+    return new Set([...recent.slice(0, Math.max(0, count)), ...rejected]);
+}
 
 export interface Lobby {
     id: string;
@@ -75,7 +92,7 @@ function allowedModes(filter: MatchmakerFilter): Set<string> | null{
     return filter.maps.length > 0 ? null : DEFAULT_MODES;
 }
 
-export function readLobbies(games: any[], filter: MatchmakerFilter): Lobby[]{
+export function readLobbies(games: any[], filter: MatchmakerFilter, skip: ReadonlySet<string> = new Set()): Lobby[]{
     const maps = filter.maps.length > 0 ? new Set(filter.maps.map(normalizeMap)) : DEFAULT_MAPS;
     const modes = allowedModes(filter);
     return games.map((game) => {
@@ -104,7 +121,7 @@ export function readLobbies(games: any[], filter: MatchmakerFilter): Lobby[]{
             lobby.players <= filter.maxPlayers &&
             lobby.players < lobby.limit &&
             (lobby.timeLeft > 0 ? lobby.timeLeft >= filter.minTime : details.g === PARKOUR) &&
-            !globalThis.location?.href.includes(id);
+            !skip.has(id);
         return lobby;
     });
 }

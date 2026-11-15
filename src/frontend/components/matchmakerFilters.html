@@ -93,6 +93,10 @@
 	cursor: pointer;
 }
 
+.mmRow:has(input:disabled) {
+	opacity: 0.45;
+}
+
 [hidden] {
 	display: none !important;
 }
@@ -205,10 +209,13 @@
 	<label class="mmRow">Min players <input type="number" id="mmMinPlayers" min="0" max="7"></label>
 	<label class="mmRow">Max players <input type="number" id="mmMaxPlayers" min="0" max="7"></label>
 	<label class="mmRow">Min time left (seconds) <input type="number" id="mmMinTime" min="0" max="480" step="10"></label>
+	<label class="mmRow">Skip the lobbies you were in last (1 = only the current one, 0 = off) <input type="number" id="mmSkipRecent" min="0" max="10"></label>
 	<label class="mmRow">Most players first (otherwise lowest ping first) <input type="checkbox" id="mmSortByPlayers"></label>
+	<label class="mmRow">Keep searching until a lobby matches (checks every 10 seconds) <input type="checkbox" id="mmKeepSearching"></label>
 	<label class="mmRow">Open the server browser when nothing matches <input type="checkbox" id="mmServerBrowser"></label>
 	<label class="mmRow">Show the search <input type="checkbox" id="mmAnimation"></label>
 	<label class="mmRow">Search again when a match ends (public lobbies only) <input type="checkbox" id="mmSearchAfterMatch"></label>
+	<label class="mmRow">Collect double XP and rewards when a match ends <input type="checkbox" id="mmCollectRewards"></label>
 	<div id="mmActions">
 		<div class="mmButton" id="mmReset">Reset</div>
 		<div class="mmButton" id="mmDone">Done</div>

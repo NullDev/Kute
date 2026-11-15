@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_FILTER, GAMEMODES, readLobbies } from "../src/frontend/modules/matchmakerFilter.ts";
+import { DEFAULT_FILTER, GAMEMODES, MAX_SKIP_RECENT, readLobbies, rememberLobby, skippedLobbies } from "../src/frontend/modules/matchmakerFilter.ts";
 import list from "./fixtures/game-list.json";
 
-// a cut of the live game list of 2026-11-08: official ffa and tdm rooms, community rooms, krunker's parkour, raid and
-// zombies rooms (oc 1), the candy heist event (mode 37, c 0) and a trade room
 const { games } = list;
 
 /**
@@ -39,7 +37,6 @@ describe("default filter", () => {
     const lobbies = readLobbies(games, filter());
 
     test("joins official ffa and tdm rooms with time left and room for one more", () => {
-        // NY:brdp2 is tdm at 7/8, above the default maximum of 6 players
         expect(passing(lobbies)).toEqual(["BRZ:4aqrd", "FRA:u4q3o", "SV:dyhkm", "DAL:04266"]);
     });
 
@@ -83,5 +80,33 @@ describe("picked modes and maps", () => {
         const chaos = [["FRA:test1", "de-fra", 3, 8, { c: 0, g: 33, i: "Burg" }, 300], ["FRA:test2", "de-fra", 3, 8, { c: 0, g: 30, i: "Burg" }, 300]];
         const lobbies = readLobbies(chaos, filter({ modes: ["Chaos Snipers"] }));
         expect(lobbies.map((lobby) => [lobby.mode, lobby.passes])).toEqual([["Chaos Snipers", true], ["Carrier", false]]);
+    });
+});
+
+describe("recent lobbies", () => {
+    test("newest first, no duplicates, capped", () => {
+        expect(rememberLobby(["B", "A"], "C")).toEqual(["C", "B", "A"]);
+        expect(rememberLobby(["B", "A"], "A")).toEqual(["A", "B"]);
+        expect(rememberLobby(["B", "A"], null)).toEqual(["B", "A"]);
+        const many = Array.from({ length: 30 }, (_, index) => `FRA:${index}`);
+        expect(rememberLobby(many, "NEW")).toHaveLength(MAX_SKIP_RECENT);
+    });
+
+    test("a broken stored list does not break the search", () => {
+        expect(rememberLobby([1, null, "A"], "B")).toEqual(["B", "A"]);
+    });
+
+    test("the count picks how many get skipped, rejected lobbies always are", () => {
+        expect([...skippedLobbies(["C", "B", "A"], 1, [])]).toEqual(["C"]);
+        expect([...skippedLobbies(["C", "B", "A"], 2, [])]).toEqual(["C", "B"]);
+        expect([...skippedLobbies(["C", "B", "A"], 0, [])]).toEqual([]);
+        expect([...skippedLobbies(["C", "B", "A"], 0, ["X"])]).toEqual(["X"]);
+    });
+
+    test("a skipped lobby never passes", () => {
+        const open = passing(readLobbies(games, filter()));
+        expect(open.length).toBeGreaterThan(1);
+        const skipped = passing(readLobbies(games, filter(), new Set([open[0]])));
+        expect(skipped).toEqual(open.slice(1));
     });
 });

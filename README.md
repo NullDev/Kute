@@ -66,7 +66,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Find out your real ping to the servers
 - [x] Real pings in Find Game: every server shows its region's ping, and the old browser layout sorts regions fastest first
 - [x] Ranked match alert (optional): when Krunker's ranked queue finds a match while you are tabbed out, Kute comes to the front or flashes in the taskbar
-- [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left)
+- [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left), can keep searching until one opens up, moves on when the lobby it picked is full, skips the lobbies you were in last and collects double XP and rewards when a match ends
 - [x] Better chat
 - [x] Chat logs: the last 2000 chat lines, kept across lobbies, to filter, search and copy (F1, rebindable)
 - [x] Hardpoint enemy counter
@@ -79,7 +79,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Kute icons: our own counter, ammo, hitmarker, reticle and scope icons, each one optional, without touching your settings
 - [x] Discord Rich Presence
 - [x] CPU throttler (a last resort, see below)
-- [x] Autoupdater with a download progress window, plus changelogs
+- [x] Autoupdater with a download progress window, plus changelogs (the automatic script updates from GitHub can be turned off)
 - [x] Rebindable kute hotkeys
 - [x] Spotify overlay - by [@Liamoulee](https://github.com/Liamoulee)
 - [x] CSS Store - by [@Liamoulee](https://github.com/Liamoulee)

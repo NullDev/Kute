@@ -27,9 +27,7 @@ use windows::{
     core::*,
 };
 
-// RT_MANIFEST id in kute-manifest.rc. the process manifest has no comctl32 v6, task dialogs need it
 const COMCTL6_MANIFEST: u16 = 100;
-// winbase.h, the windows crate keeps them behind another feature
 const ACTCTX_FLAG_RESOURCE_NAME_VALID: u32 = 0x8;
 const ACTCTX_FLAG_HMODULE_VALID: u32 = 0x80;
 
@@ -41,14 +39,9 @@ const RUNNING: u8 = 0;
 const READY: u8 = 1;
 const FAILED: u8 = 2;
 
-// one range request per chunk: a connection that goes quiet shows up as a timed out chunk instead of a read that never
-// returns, and the next request continues from the bytes already on disk. ureq counts the response timeout into the body
-// read, so a chunk gets the whole budget for its headers and bytes
 const CHUNK_BYTES: u64 = 4 * 1024 * 1024;
 const CHUNK_TIMEOUT: Duration = Duration::from_secs(60);
-// chunks in a row without a byte before the download gives up
 const MAX_FAILURES: u32 = 8;
-// a release read from the page gives no size, the download still has a ceiling
 const MAX_INSTALLER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 struct Pending {
@@ -56,13 +49,11 @@ struct Pending {
     relaunch: bool,
 }
 
-// a verified installer, run once the client has shut down
 static PENDING: Mutex<Option<Pending>> = Mutex::new(None);
 
 #[derive(Clone)]
 struct Installer {
     url: String,
-    // none when the release was read from its page
     size: Option<u64>,
     sha256: Option<String>,
 }
@@ -72,7 +63,6 @@ struct Release {
     installer: Option<Installer>,
 }
 
-// what the check did, for the diagnostics report
 struct Status {
     source: &'static str,
     api_status: Option<u16>,
@@ -105,13 +95,14 @@ pub fn status_json() -> serde_json::Value {
 }
 
 pub fn run() {
-    // first, the dialog below can stay open for the whole session
-    check_minor_update();
+    if utils::config("disableBundleUpdates", false) {
+        *crate::JS_VERSION.lock().unwrap() = include_str!("../../target/bundle_version").trim().to_string();
+    } else {
+        check_minor_update();
+    }
     check_major_update();
 }
 
-// dev builds only. KUTE_UPDATE_BASE serves /api (the release json), /latest (302 to /releases/tag/<version>) and
-// /download/<version>/<asset>, KUTE_UPDATE_API_URL alone puts a dead api in front of the real release page
 fn test_var(name: &str) -> Option<String> {
     #[cfg(feature = "verbose-logs")]
     return env::var(name).ok().filter(|value| !value.is_empty());
@@ -193,7 +184,6 @@ fn check_minor_update() {
     }
 }
 
-// none: this build does not install itself (portable zip), the player gets the release page
 fn installer_name() -> Option<&'static str> {
     (cfg!(all(windows, target_arch = "x86_64")) && !utils::is_portable()).then_some(constants::INSTALLER_ASSET)
 }
@@ -217,7 +207,6 @@ fn api_release() -> Option<Release> {
     response.into_body().as_reader().read_to_string(&mut text).ok()?;
     let json = serde_json::from_str::<serde_json::Value>(&text).ok()?;
     let version = semver::Version::parse(json["tag_name"].as_str()?.trim()).ok()?;
-    // by exact name, never by position: exes up to 0.1.17 take assets[0] and the api sorts by name
     let installer = installer_name().and_then(|name| {
         let asset = json["assets"].as_array()?.iter().find(|asset| asset["name"].as_str() == Some(name))?;
         let url = asset["browser_download_url"].as_str()?;
@@ -236,7 +225,6 @@ fn api_release() -> Option<Release> {
     Some(Release { version, installer })
 }
 
-// "/releases/tag/1.3.0" at the end of the location header, with or without a v
 fn tag_from_location(location: &str) -> Option<&str> {
     let (_, tag) = location.split_once("/releases/tag/")?;
     let tag = tag.split(['?', '#']).next()?.trim_end_matches('/');
@@ -244,8 +232,6 @@ fn tag_from_location(location: &str) -> Option<&str> {
     (!tag.is_empty()).then_some(tag)
 }
 
-// github.com/<repo>/releases/latest answers 302 to /releases/tag/<version>. the api allows 60 requests an hour per
-// address, a shared network uses that up and the check looked like "no update" (krh found it). the redirect has no limit
 fn page_release() -> Option<Release> {
     let url = page_url();
     let agent: ureq::Agent = ureq::Agent::config_builder()
@@ -268,7 +254,6 @@ fn page_release() -> Option<Release> {
         note(|status| status.error = Some(format!("release page answered {} without a tag", response.status())));
         return None;
     };
-    // the asset keeps its name on every release, so the url needs nothing from the api
     let installer = installer_name().map(|name| Installer {
         url: format!("{}{version}/{name}", download_prefix()),
         size: None,
@@ -344,14 +329,12 @@ impl Drop for Sha256 {
 
 struct Progress {
     done: AtomicU64,
-    // 0 until known
     total: AtomicU64,
     state: AtomicU8,
     cancel: AtomicBool,
     error: Mutex<String>,
 }
 
-// "bytes 0-8388607/170590208", the total may be "*"
 fn content_range(header: &str) -> Option<(u64, u64, Option<u64>)> {
     let range = header.trim().strip_prefix("bytes ")?;
     let (span, total) = range.split_once('/')?;
@@ -360,7 +343,6 @@ fn content_range(header: &str) -> Option<(u64, u64, Option<u64>)> {
 }
 
 enum Fail {
-    // the next request continues from the bytes on disk
     Retry(String),
     Final(String),
 }
@@ -402,7 +384,6 @@ impl Transfer<'_> {
         let end = self.total.map_or(self.done + CHUNK_BYTES - 1, |total| (self.done + CHUNK_BYTES - 1).min(total - 1));
         let response = match chunk_agent().get(url).header("Range", &format!("bytes={}-{end}", self.done)).call() {
             Ok(response) => response,
-            // a range at the end of the file: without a size from the release this is where it ends
             Err(ureq::Error::StatusCode(416)) if self.done > 0 && self.total.is_none() => return self.learn_total(self.done),
             Err(ureq::Error::StatusCode(code)) if code >= 500 => return Err(Fail::Retry(format!("The server answered {code}."))),
             Err(ureq::Error::StatusCode(code)) => return Err(Fail::Final(format!("The download was refused ({code})."))),
@@ -423,7 +404,6 @@ impl Transfer<'_> {
                     self.learn_total(total)?;
                 }
             }
-            // the range was ignored: from the start that is the whole file in one go, later it cannot continue
             200 if self.done == 0 => {
                 if let Some(length) = header("content-length").and_then(|value| value.parse().ok()) {
                     self.learn_total(length)?;
@@ -477,7 +457,6 @@ fn fetch(installer: &Installer, progress: &Progress, part: &Path) -> std::result
                 if failures > MAX_FAILURES {
                     return Err(message);
                 }
-                // the pause between attempts keeps cancel responsive
                 for _ in 0..failures.min(5) * 10 {
                     if progress.cancel.load(Ordering::Relaxed) {
                         return Err("Cancelled.".to_string());
@@ -501,7 +480,6 @@ fn fetch(installer: &Installer, progress: &Progress, part: &Path) -> std::result
 fn download(installer: &Installer, progress: &Progress) -> std::result::Result<PathBuf, String> {
     let dir = utils::exe_dir();
     let part = dir.join(format!("{}.part", constants::INSTALLER_ASSET));
-    // msi registers the file name, and a later run of the github download under another name fails its repair with 1316
     let target = dir.join(constants::INSTALLER_ASSET);
     debug_print!("updater: downloading {} ({:?} bytes)", installer.url, installer.size);
 
@@ -529,7 +507,6 @@ enum Stage {
 
 pub(crate) type TaskDialogIndirect = unsafe extern "system" fn(*const TASKDIALOGCONFIG, *mut i32, *mut i32, *mut BOOL) -> HRESULT;
 
-// the activation context stays on for this thread, the dialog's controls are created under it
 pub(crate) fn load_task_dialog() -> Option<TaskDialogIndirect> {
     unsafe {
         let module = GetModuleHandleW(None).ok()?;
@@ -580,7 +557,6 @@ struct Dialog {
     stage: Cell<Stage>,
     shown_mb: Cell<u64>,
     marquee: Cell<bool>,
-    // task dialogs keep pointers to their text, so every string lives as long as the dialog
     strings: RefCell<Vec<Vec<u16>>>,
     buttons: RefCell<Vec<Vec<TASKDIALOG_BUTTON>>>,
 }
@@ -721,7 +697,6 @@ impl Dialog {
         }
     }
 
-    // the bar sweeps while the size is unknown (a release read from its page, until the first chunk tells it)
     fn set_marquee(&self, hwnd: HWND, on: bool) {
         if self.marquee.get() == on {
             return;
@@ -784,7 +759,6 @@ impl Dialog {
         }
     }
 
-    // S_FALSE keeps the dialog open
     fn clicked(&self, hwnd: HWND, id: i32) -> HRESULT {
         match (self.stage.get(), id) {
             (Stage::Offer, BTN_UPDATE) => {
@@ -841,7 +815,6 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: TASKDIALOG_NOTIFICATIONS, wp
     match msg {
         TDN_CREATED => {
             set_icons(hwnd);
-            // the main window comes up around the same time and would cover the offer
             unsafe {
                 SetForegroundWindow(hwnd).ok().ok();
             }
@@ -868,8 +841,6 @@ fn set_icons(hwnd: HWND) {
     }
 }
 
-// basic ui without cancel or a final dialog, so the player sees it install. the log stays for a report when the old
-// version is still there afterwards (files in use, 1603, 1618)
 fn msiexec_args(msi: &Path, relaunch: bool, log: &Path) -> String {
     let mut args = format!("/i \"{}\" /qb!- /L*v \"{}\"", msi.display(), log.display());
     if !relaunch {
@@ -878,7 +849,6 @@ fn msiexec_args(msi: &Path, relaunch: bool, log: &Path) -> String {
     args
 }
 
-// after shutdown: the client no longer holds its files, msiexec closes nothing of ours
 pub fn install_pending() {
     let Some(pending) = PENDING.lock().unwrap().take() else { return };
     let msiexec = PathBuf::from(env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string()))
@@ -892,7 +862,6 @@ pub fn install_pending() {
 }
 
 pub fn installer_cleanup() -> io::Result<()> {
-    // a portable folder may be the downloads folder, its msi files are not ours
     if utils::is_portable() {
         return Ok(());
     }

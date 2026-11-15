@@ -1,4 +1,3 @@
-// bundle hot updates, and new client versions as a new AppImage. the page asks (linuxUpdate.js), nothing closes the client
 use crate::{constants, debug_print, utils, window};
 use sha2::{Digest, Sha256};
 use std::{
@@ -13,7 +12,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-// the exe's own bundle, a downloaded one only counts when it is newer: it outlives an exe update here
 const EMBEDDED_VERSION: &str = include_str!("../../target/bundle_version");
 const PROGRESS_EVERY: Duration = Duration::from_millis(500);
 
@@ -29,13 +27,11 @@ struct Release {
     asset: Option<Asset>,
 }
 
-// what the page sees as {update}, resent on "update-state" after a page load
 static STATE: Mutex<Option<serde_json::Value>> = Mutex::new(None);
 static OFFER: Mutex<Option<(semver::Version, Asset)>> = Mutex::new(None);
 static DOWNLOADING: AtomicBool = AtomicBool::new(false);
 static READY: AtomicBool = AtomicBool::new(false);
 
-// next to the exe is read only in an AppImage
 fn bundle_dir() -> PathBuf {
     utils::settings_dir().join("bundle")
 }
@@ -48,7 +44,6 @@ fn downloaded_version() -> Option<semver::Version> {
     parse(&fs::read_to_string(bundle_dir().join("bundle_version")).ok()?)
 }
 
-// renderer, every page load
 pub fn downloaded_bundle() -> Option<String> {
     if downloaded_version()? <= parse(EMBEDDED_VERSION)? {
         return None;
@@ -78,7 +73,6 @@ fn get_string(url: &str) -> Option<String> {
     Some(text)
 }
 
-// dev builds only: a local release json, its downloads may point anywhere
 fn test_release_url() -> Option<String> {
     #[cfg(feature = "verbose-logs")]
     return env::var("KUTE_UPDATE_URL").ok();
@@ -86,7 +80,6 @@ fn test_release_url() -> Option<String> {
     None
 }
 
-// the running AppImage file, set by the AppImage runtime. None for a plain build, which cannot update itself
 fn appimage() -> Option<PathBuf> {
     env::var_os("APPIMAGE").map(PathBuf::from).filter(|path| path.is_file())
 }
@@ -96,9 +89,12 @@ pub fn run() {
     check_release();
 }
 
-// a new bundle applies on the next navigation
 fn check_bundle() {
     let Some(embedded) = parse(EMBEDDED_VERSION) else { return };
+    if utils::config("disableBundleUpdates", false) {
+        *crate::JS_VERSION.lock().unwrap() = embedded.to_string();
+        return;
+    }
     let current = downloaded_version().filter(|version| *version > embedded).unwrap_or(embedded);
     *crate::JS_VERSION.lock().unwrap() = current.to_string();
 
@@ -109,7 +105,6 @@ fn check_bundle() {
     }
     let Some(bundle) = get_string(constants::JS_BUNDLE_URL) else { return };
     fs::create_dir_all(bundle_dir()).ok();
-    // version last: a bundle without its version is never picked up
     if utils::atomic_write(&bundle_dir().join("bundle.js"), &bundle).is_ok()
         && utils::atomic_write(&bundle_dir().join("bundle_version"), &latest_text.trim()).is_ok()
     {
@@ -121,7 +116,6 @@ fn latest_release() -> Option<Release> {
     let url = test_release_url().unwrap_or_else(|| constants::UPDATE_URL.to_string());
     let json = serde_json::from_str::<serde_json::Value>(&get_string(&url)?).ok()?;
     let version = parse(json["tag_name"].as_str()?)?;
-    // by exact name, and only with a checksum to verify against
     let asset = json["assets"].as_array().and_then(|assets| {
         let asset = assets.iter().find(|asset| asset["name"].as_str() == Some(constants::APPIMAGE_ASSET))?;
         let url = asset["browser_download_url"].as_str()?;
@@ -164,7 +158,6 @@ fn check_release() {
     }
 }
 
-// page loaded after the check, or asked again
 pub fn send_state(browser: &cef::Browser) {
     if let Some(state) = STATE.lock().unwrap().clone() {
         crate::bridge::post_json(browser, &serde_json::json!({ "update": state }).to_string());
@@ -192,7 +185,6 @@ pub fn install() {
     });
 }
 
-// next to the running AppImage, verified, then renamed over it. the running copy stays mounted from the old inode
 fn download(asset: &Asset, version: &str) -> Result<(), String> {
     let target = appimage().ok_or("This copy of Kute is not an AppImage.")?;
     let part = target.with_extension("AppImage.part");
@@ -242,7 +234,6 @@ fn download(asset: &Asset, version: &str) -> Result<(), String> {
     result
 }
 
-// "Restart now" after the AppImage was replaced
 pub fn restart() {
     if READY.load(Ordering::SeqCst) {
         crate::modules::lifecycle::restart();
@@ -252,7 +243,6 @@ pub fn restart() {
 pub fn install_pending() {}
 
 pub fn installer_cleanup() -> std::io::Result<()> {
-    // a .part a crash left behind
     if let Some(appimage) = appimage() {
         fs::remove_file(appimage.with_extension("AppImage.part")).ok();
     }

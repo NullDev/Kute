@@ -3,7 +3,11 @@ import { kute } from "../client";
 import { request } from "../utils";
 import { matches } from "./hotkeys";
 import { OFFICIAL_MAPS, mapImageUrl } from "./maps";
-import { DEFAULT_FILTER, MAP_FILTER, MODE_FILTER, normalizeMap, readLobbies, type MatchmakerFilter, type Lobby } from "./matchmakerFilter";
+import {
+    DEFAULT_FILTER, MAP_FILTER, MAX_SKIP_RECENT, MODE_FILTER, normalizeMap, readLobbies, rememberLobby, skippedLobbies,
+    type MatchmakerFilter, type Lobby,
+} from "./matchmakerFilter";
+import { SEARCH_INTERVAL_MS, cooldownMs, nextRetryMs, retryAfterMs } from "./matchmakerPacing";
 
 const REGIONS: Record<string, string> = {
     SV: "Silicon Valley", TOK: "Tokyo", FRA: "Frankfurt", MBI: "Mumbai", SYD: "Sydney",
@@ -23,8 +27,68 @@ const MIN_TICK_MS = 20;
 const POST_SCAN_PAUSE_MS = 180;
 const FOUND_HOLD_MS = 1200;
 const NOT_FOUND_HOLD_MS = 1100;
+const FAILED_HOLD_MS = 2000;
+const SCAN_LABEL = "Scanning lobbies...";
+const JOIN_KEY = "kute_mm_join";
+const RECENT_KEY = "kute_mm_recent";
+const JOIN_MAX_AGE_MS = 120000;
+const JOIN_WATCH_MS = 20000;
+const JOIN_POLL_MS = 250;
+const MAX_RECOVERIES = 3;
+const REJECTIONS: [RegExp, string][] = [
+    [/game is full/i, "Lobby was full, scanning..."],
+    [/game not found/i, "Lobby is gone, scanning..."],
+];
+const MIN_WAIT_MS = 1000;
+const COLLECT_WAIT_MS = 6000;
+const COLLECT_POLL_MS = 200;
+const COLLECT_GRACE_MS = 3000;
+const CONFIRM_DELAY_MS = 1000;
+const CONFIRM_WAIT_MS = 3000;
+
+type Outcome = "joined" | "none" | "stale" | "failed";
+
+class GameListError extends Error {
+    status: number;
+    retryAfter: number | null;
+
+    constructor(status: number, retryAfter: number | null){
+        super(`game list: HTTP ${status}`);
+        this.status = status;
+        this.retryAfter = retryAfter;
+    }
+}
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function readSession(key: string): any{
+    try {
+        return JSON.parse(sessionStorage.getItem(key) ?? "null");
+    }
+    catch {
+        return null;
+    }
+}
+
+function writeSession(key: string, value: unknown): void{
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    }
+    catch {
+        return;
+    }
+}
+
+function takeSession(key: string): any{
+    const value = readSession(key);
+    try {
+        sessionStorage.removeItem(key);
+    }
+    catch {
+        return value;
+    }
+    return value;
+}
 
 function mapIconUrl(map: string): string | null{
     const index = MAP_ICON_BY_NAME.get(normalizeMap(map));
@@ -41,6 +105,10 @@ function mapIcon(map: string, className: string): HTMLImageElement | null{
     img.loading = "lazy";
     img.onerror = (): void => img.remove();
     return img;
+}
+
+function visible(element: HTMLElement | null): element is HTMLElement{
+    return !!element?.checkVisibility({ visibilityProperty: true });
 }
 
 function span(className: string, text: string): HTMLSpanElement{
@@ -61,6 +129,7 @@ function lobbyEntry(lobby: Lobby, className: string): HTMLDivElement{
 
 async function fetchGameList(): Promise<any[]>{
     const response = await fetch(GAME_LIST_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!response.ok) throw new GameListError(response.status, retryAfterMs(response.headers.get("Retry-After"), Date.now()));
     const result = await response.json();
     return Array.isArray(result?.games) ? result.games : [];
 }
@@ -69,6 +138,12 @@ class Matchmaker {
     activeRun = 0;
     runCounter = 0;
     candidates: Lobby[] = [];
+    pausedUntil = 0;
+    lastFetch = 0;
+    collecting: Promise<void> | null = null;
+    rejected: string[] = [];
+    skip: ReadonlySet<string> = new Set();
+    scanLabel = SCAN_LABEL;
     popup = document.createElement("div");
     status: HTMLDivElement;
     feed: HTMLDivElement;
@@ -108,11 +183,41 @@ class Matchmaker {
             (event) => {
                 if (!matches(event, "matchmaker") || event.repeat || !kute.settings.data.matchmaker) return;
                 if (document.activeElement?.tagName === "INPUT") return;
+                if (this.activeRun !== 0 && this.filter.keepSearching){
+                    this.abort();
+                    return;
+                }
                 this.start().catch((error) => console.error("[kute] matchmaker:", error));
             },
             true,
         );
         this.watchEndScreen();
+        this.watchJoin();
+    }
+
+    watchJoin(): void{
+        const marker = takeSession(JOIN_KEY);
+        const screen = document.getElementById("instructionsUpdate");
+        if (!screen || typeof marker?.id !== "string" || !Array.isArray(marker.rejected)) return;
+        if (Date.now() - Number(marker.at) > JOIN_MAX_AGE_MS || !location.href.includes(marker.id)) return;
+
+        const deadline = Date.now() + JOIN_WATCH_MS;
+        const timer = setInterval(() => {
+            if (document.pointerLockElement || Date.now() > deadline){
+                clearInterval(timer);
+                return;
+            }
+            if (screen.style.display === "none") return;
+            const text = screen.textContent;
+            const rejection = REJECTIONS.find(([pattern]) => pattern.test(text));
+            if (!rejection) return;
+            clearInterval(timer);
+
+            this.rejected = [...marker.rejected.filter((id: unknown) => typeof id === "string"), marker.id];
+            if (this.rejected.length > MAX_RECOVERIES || !kute.settings.data.matchmaker) return;
+            [, this.scanLabel] = rejection;
+            this.start().catch((error) => console.error("[kute] matchmaker:", error));
+        }, JOIN_POLL_MS);
     }
 
     watchEndScreen(): void{
@@ -129,9 +234,69 @@ class Matchmaker {
             shown = up;
             if (!up || !played) return;
             played = false;
-            if (!kute.settings.data.matchmaker || !this.filter.searchAfterMatch || window.getGameActivity?.()?.custom) return;
-            this.start().catch((error) => console.error("[kute] matchmaker:", error));
+            if (!kute.settings.data.matchmaker) return;
+            this.afterMatch(endUI, !!window.getGameActivity?.()?.custom).catch((error) => console.error("[kute] matchmaker:", error));
         }).observe(endUI, { attributes: true, attributeFilter: ["style"] });
+    }
+
+    async afterMatch(endUI: HTMLElement, custom: boolean): Promise<void>{
+        if (this.filter.collectRewards && !this.collecting){
+            this.collecting = this.collect(endUI).finally(() => (this.collecting = null));
+            await this.collecting;
+        }
+        if (custom || !this.filter.searchAfterMatch || endUI.style.display === "none") return;
+        await this.start();
+    }
+
+    async collect(endUI: HTMLElement): Promise<void>{
+        const open = (): boolean => endUI.style.display !== "none";
+        const deadline = Date.now() + COLLECT_WAIT_MS;
+
+        while (open() && Date.now() < deadline){
+            const rewards = document.querySelector("#collectRewardsButtonContainer button.collect-rewards-button") as HTMLButtonElement | null;
+            if (visible(rewards) && !rewards.disabled && rewards.getAttribute("aria-disabled") !== "true"){
+                rewards.click();
+                await sleep(COLLECT_GRACE_MS);
+                break;
+            }
+            await sleep(COLLECT_POLL_MS);
+        }
+
+        let doubleXp = document.getElementById("doubleXPButton");
+        while (open() && !visible(doubleXp) && Date.now() < deadline){
+            await sleep(COLLECT_POLL_MS);
+            doubleXp = document.getElementById("doubleXPButton");
+        }
+        if (!open() || !visible(doubleXp)) return;
+        doubleXp.click();
+
+        const started = Date.now();
+        await sleep(CONFIRM_DELAY_MS);
+        while (open() && Date.now() - started < CONFIRM_WAIT_MS){
+            const confirm = Array.from(document.querySelectorAll(".button.dxp-btn") as NodeListOf<HTMLElement>).find(
+                (button) => button.textContent.trim().toLowerCase() === "nice!" && visible(button),
+            );
+            if (confirm){
+                confirm.click();
+                break;
+            }
+            await sleep(COLLECT_POLL_MS);
+        }
+        await sleep(Math.max(0, started + COLLECT_GRACE_MS - Date.now()));
+    }
+
+    async gameList(): Promise<any[]>{
+        this.lastFetch = Date.now();
+        try {
+            return await fetchGameList();
+        }
+        catch (error){
+            if (error instanceof GameListError){
+                const pause = cooldownMs(error.status, error.retryAfter);
+                if (pause > 0) this.pausedUntil = Math.max(this.pausedUntil, Date.now() + pause);
+            }
+            throw error;
+        }
     }
 
     get filter(): MatchmakerFilter{
@@ -182,7 +347,8 @@ class Matchmaker {
     async animateScan(run: number, lobbies: Lobby[], best?: Lobby): Promise<void>{
         const total = lobbies.length;
         if (total === 0) return;
-        this.status.textContent = "Scanning lobbies...";
+        this.status.textContent = this.scanLabel;
+        this.scanLabel = SCAN_LABEL;
 
         const maxEntries = Math.floor(MAX_ANIMATION_MS / BASE_TICK_MS);
         const step = total > maxEntries ? total / maxEntries : 1;
@@ -201,10 +367,13 @@ class Matchmaker {
         await sleep(POST_SCAN_PAUSE_MS);
     }
 
-    join(id: string): void{
+    async join(run: number, id: string): Promise<void>{
+        if (this.collecting) await this.collecting;
+        if (this.cancelled(run)) return;
         this.dismiss();
         window.chrome.webview.postMessage("throttle, off");
         window.chrome.webview.postMessage("drag, true");
+        writeSession(JOIN_KEY, { id, at: Date.now(), rejected: this.rejected });
         location.href = `https://krunker.io/?game=${id}`;
     }
 
@@ -213,22 +382,64 @@ class Matchmaker {
         if (filter.serverBrowser) window.openServerWindow?.(0);
     }
 
-    async verifyAndJoin(run: number, best: Lobby, filter: MatchmakerFilter): Promise<void>{
+    async verifyAndJoin(run: number, best: Lobby, filter: MatchmakerFilter): Promise<Outcome>{
         let games;
         try {
-            games = await fetchGameList();
+            games = await this.gameList();
         }
         catch {
-            if (!this.cancelled(run)) this.join(best.id);
-            return;
+            await this.join(run, best.id);
+            return "joined";
         }
-        if (this.cancelled(run)) return;
+        if (this.cancelled(run)) return "joined";
 
-        const live = new Map(readLobbies(games, filter).map((lobby) => [lobby.id, lobby]));
+        const live = new Map(readLobbies(games, filter, this.skip).map((lobby) => [lobby.id, lobby]));
         const ordered = [best, ...this.candidates.filter((lobby) => lobby !== best)];
         const open = ordered.find((lobby) => live.get(lobby.id)?.passes);
-        if (open) this.join(open.id);
-        else this.openServerBrowser(filter);
+        if (!open) return "stale";
+        await this.join(run, open.id);
+        return "joined";
+    }
+
+    async showFailure(run: number, filter: MatchmakerFilter, status: string, detail: string): Promise<void>{
+        if (!filter.animation) return;
+        this.status.textContent = status;
+        this.status.classList.add("mm-fail");
+        this.counter.textContent = detail;
+        await sleep(FAILED_HOLD_MS);
+        if (!this.cancelled(run)) this.dismiss();
+    }
+
+    async showNothing(run: number, filter: MatchmakerFilter): Promise<void>{
+        if (filter.animation){
+            this.showNote("No Lobby Found", "No matching lobbies");
+            this.counter.textContent = filter.serverBrowser ? "Opening server browser..." : "";
+            await sleep(NOT_FOUND_HOLD_MS);
+            if (this.cancelled(run)) return;
+        }
+        this.openServerBrowser(filter);
+    }
+
+    showNote(status: string, detail: string): void{
+        this.status.textContent = status;
+        this.status.classList.add("mm-fail");
+        this.feed.classList.add("mm-result");
+        const note = document.createElement("div");
+        note.className = "mm-entry mm-none";
+        note.textContent = detail;
+        this.feed.replaceChildren(note);
+    }
+
+    async wait(run: number, ms: number, status: string, detail: string): Promise<boolean>{
+        if (!this.popup.isConnected) this.showPopup();
+        this.showNote(status, detail);
+        const until = Date.now() + ms;
+        for (let left = ms, first = true; left > 0; left = until - Date.now(), first = false){
+            if (first || !document.pointerLockElement) this.counter.textContent = `Searching again in ${Math.ceil(left / 1000)}s`;
+            await sleep(Math.min(1000, left));
+            if (this.cancelled(run)) return false;
+        }
+        return true;
     }
 
     async start(): Promise<void>{
@@ -247,23 +458,62 @@ class Matchmaker {
         const { filter } = this;
         if (filter.animation) this.showPopup();
 
+        const recent = rememberLobby(readSession(RECENT_KEY) ?? [], new URLSearchParams(location.search).get("game"));
+        writeSession(RECENT_KEY, recent);
+        this.skip = skippedLobbies(recent, filter.skipRecent, this.rejected);
+
+        let retryMs = 0;
+        for (let first = true; ; first = false){
+            const paused = this.pausedUntil - Date.now();
+            if (paused > 0){
+                if (!filter.keepSearching){
+                    await this.showFailure(run, filter, "Lobby list rate limited", `Try again in ${Math.ceil(paused / 1000)}s`);
+                    return;
+                }
+                if (!(await this.wait(run, paused, "Lobby list rate limited", "Krunker asked for a pause"))) return;
+            }
+
+            const outcome = await this.attempt(run, filter, first);
+            if (outcome === "joined" || this.cancelled(run)) return;
+
+            if (!filter.keepSearching){
+                if (outcome === "failed") await this.showFailure(run, filter, "Failed to fetch lobbies", "");
+                else if (outcome === "stale") this.openServerBrowser(filter);
+                else await this.showNothing(run, filter);
+                return;
+            }
+            if (Date.now() < this.pausedUntil) continue;
+
+            if (outcome === "failed"){
+                retryMs = nextRetryMs(retryMs);
+                if (!(await this.wait(run, retryMs, "Failed to fetch lobbies", "Lobby list unavailable"))) return;
+                continue;
+            }
+            retryMs = 0;
+            const delay = Math.max(MIN_WAIT_MS, this.lastFetch + SEARCH_INTERVAL_MS - Date.now());
+            if (!(await this.wait(run, delay, "No Lobby Found", "No matching lobbies"))) return;
+        }
+    }
+
+    async attempt(run: number, filter: MatchmakerFilter, first: boolean): Promise<Outcome>{
+        if (!first && this.popup.isConnected){
+            this.status.textContent = SCAN_LABEL;
+            this.status.classList.remove("mm-fail");
+            this.counter.textContent = "";
+        }
+
         let lobbies: Lobby[];
         let pings: Record<string, number>;
         try {
-            const [games, regionPings] = await Promise.all([fetchGameList(), request("ping-regions", "regionPings", FETCH_TIMEOUT_MS)]);
-            lobbies = readLobbies(games, filter);
+            const [games, regionPings] = await Promise.all([this.gameList(), request("ping-regions", "regionPings", FETCH_TIMEOUT_MS)]);
+            lobbies = readLobbies(games, filter, this.skip);
             pings = regionPings ?? {};
         }
         catch (error){
             console.error("[kute] matchmaker: no lobby list", error);
-            if (this.cancelled(run) || !filter.animation) return;
-            this.status.textContent = "Failed to fetch lobbies";
-            this.status.classList.add("mm-fail");
-            await sleep(2000);
-            if (!this.cancelled(run)) this.dismiss();
-            return;
+            return "failed";
         }
-        if (this.cancelled(run)) return;
+        if (this.cancelled(run)) return "joined";
 
         const ping = (lobby: Lobby): number => pings[lobby.server] ?? 999;
         const mapRanks = new Map(filter.preferredMaps.map((map, index) => [normalizeMap(map), index]));
@@ -295,36 +545,21 @@ class Matchmaker {
             best = pool[Math.floor(Math.random() * pool.length)];
         }
 
-        if (filter.animation) await this.animateScan(run, lobbies, best);
-        if (this.cancelled(run)) return;
-
-        if (!best){
-            if (filter.animation){
-                this.status.textContent = "No Lobby Found";
-                this.status.classList.add("mm-fail");
-                this.feed.classList.add("mm-result");
-                const none = document.createElement("div");
-                none.className = "mm-entry mm-none";
-                none.textContent = "No matching lobbies";
-                this.feed.replaceChildren(none);
-                this.counter.textContent = filter.serverBrowser ? "Opening server browser..." : "";
-                await sleep(NOT_FOUND_HOLD_MS);
-                if (this.cancelled(run)) return;
-            }
-            this.openServerBrowser(filter);
-            return;
-        }
+        if (filter.animation && first) await this.animateScan(run, lobbies, best);
+        if (this.cancelled(run)) return "joined";
+        if (!best) return "none";
 
         if (filter.animation){
             this.status.textContent = "Lobby Found!";
+            this.status.classList.remove("mm-fail");
             this.feed.classList.add("mm-result");
             this.feed.replaceChildren(lobbyEntry(best, "mm-pass mm-found"));
             const pingText = pings[best.server] === undefined ? "?" : String(pings[best.server]);
             this.counter.textContent = `${best.mode} · ${REGIONS[best.region] ?? best.region} · ${pingText}ms`;
             await sleep(FOUND_HOLD_MS);
-            if (this.cancelled(run)) return;
+            if (this.cancelled(run)) return "joined";
         }
-        await this.verifyAndJoin(run, best, filter);
+        return this.verifyAndJoin(run, best, filter);
     }
 
     async showFilters(): Promise<void>{
@@ -502,10 +737,17 @@ class Matchmaker {
             element("mmMinPlayers").value = String(filter.minPlayers);
             element("mmMaxPlayers").value = String(filter.maxPlayers);
             element("mmMinTime").value = String(filter.minTime);
+            element("mmSkipRecent").value = String(filter.skipRecent);
             element("mmSortByPlayers").checked = filter.sortByPlayers;
             element("mmServerBrowser").checked = filter.serverBrowser;
             element("mmAnimation").checked = filter.animation;
             element("mmSearchAfterMatch").checked = filter.searchAfterMatch;
+            element("mmCollectRewards").checked = filter.collectRewards;
+            element("mmKeepSearching").checked = filter.keepSearching;
+            element("mmServerBrowser").disabled = filter.keepSearching;
+        };
+        element("mmKeepSearching").onchange = (): void => {
+            element("mmServerBrowser").disabled = element("mmKeepSearching").checked;
         };
         filter.regions = [...filter.regions];
         filter.modes = [...filter.modes];
@@ -528,10 +770,13 @@ class Matchmaker {
                 minPlayers: number("mmMinPlayers", 0, 7, DEFAULT_FILTER.minPlayers),
                 maxPlayers: number("mmMaxPlayers", 0, 7, DEFAULT_FILTER.maxPlayers),
                 minTime: number("mmMinTime", 0, 480, DEFAULT_FILTER.minTime),
+                skipRecent: number("mmSkipRecent", 0, MAX_SKIP_RECENT, DEFAULT_FILTER.skipRecent),
                 sortByPlayers: element("mmSortByPlayers").checked,
                 serverBrowser: element("mmServerBrowser").checked,
                 animation: element("mmAnimation").checked,
                 searchAfterMatch: element("mmSearchAfterMatch").checked,
+                collectRewards: element("mmCollectRewards").checked,
+                keepSearching: element("mmKeepSearching").checked,
             });
         };
         element("mmDone").onclick = close;
