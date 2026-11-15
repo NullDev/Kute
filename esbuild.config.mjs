@@ -29,7 +29,6 @@ export const textMinifyPlugin = {
             const scripts = [];
             let index = 0;
 
-            // park scripts in placeholders so the whitespace collapse doesn't wreck them
             contents = contents.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, (_, scriptContent) => {
                 scripts.push(scriptContent);
                 return `___SCRIPT_${index++}___`;
@@ -66,7 +65,7 @@ export const popupScriptPlugin = {
         }));
         pluginBuild.onLoad({ filter: /.*/, namespace: "popup-script" }, async(args) => {
             const source = await readFile(args.path, "utf8");
-            const result = await transform(source, { loader: "js", minify: true });
+            const result = await transform(source, { loader: "ts", minify: true });
             return { loader: "text", contents: result.code, watchFiles: [args.path] };
         });
     },
@@ -74,7 +73,7 @@ export const popupScriptPlugin = {
 
 console.log("Starting esbuild process...");
 await build({
-    entryPoints: ["./src/frontend/main.js"],
+    entryPoints: ["./src/frontend/main.ts"],
     bundle: true,
     minify: true,
     format: "iife",

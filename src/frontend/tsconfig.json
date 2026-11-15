@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "types": [],
+        "allowJs": true,
+        "checkJs": true,
+        "strict": true,
+        "noEmit": true,
+        "isolatedModules": true,
+        "resolveJsonModule": true
+    },
+    "include": ["**/*.ts", "host/*.js", "../cSettings.json"]
+}

@@ -1,0 +1,530 @@
+import { kute } from "../../client";
+import html from "../../components/managers/customCss.html";
+import customCss, { hostSupportsCustomCss } from "../customCss";
+import { openManagerPopup, askConfirm, askText, makeDropTarget, formatSize, type ManagerPopup } from "./popup";
+import { createEditorView, type CodeEditor } from "./editor";
+
+const PREVIEW_DELAY = 120;
+const MAX_SIZE = 4 * 1024 * 1024;
+const LEGACY_FILE = "custom.css";
+
+const hostSupportsManager = (): boolean => kute.hostFeatures?.includes("css-manager") ?? false;
+
+const cssName = (name: string): string => (/\.css$/i.test(name) ? name : `${name}.css`);
+
+const STORE_BASE = "https://raw.githubusercontent.com/kute-client/kute-css-store/main/";
+const STORE_TIMEOUT = 8000;
+
+type StoreItem = {name: string, author: string, file: string, preview: string};
+
+const storePath = (path: unknown): path is string => typeof path === "string" && path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+
+const storeUrl = (path: string): string => STORE_BASE + path.split("/").map(encodeURIComponent).join("/");
+
+const storeItem = (entry: any): StoreItem | null => {
+    const name = typeof entry?.name === "string" ? entry.name.replace(/[\\/:*?"<>|]/g, "").trim() : "";
+    if (!name || !storePath(entry.file) || !/\.css$/i.test(entry.file)) return null;
+    return {
+        name: cssName(name),
+        author: typeof entry.author === "string" ? entry.author : "",
+        file: entry.file,
+        preview: storePath(entry.preview) ? entry.preview : "",
+    };
+};
+
+const post = (command: string, payload?: object): void => window.chrome.webview.postMessage(payload ? `css-${command} ${JSON.stringify(payload)}` : `css-${command}`);
+
+type CssFile = {name: string, size: number};
+
+class CssManager {
+    popup: ManagerPopup | null = null;
+    editor: CodeEditor | null = null;
+    editing: string | null = null;
+    loading: string | null = null;
+    files: CssFile[] = [];
+    active: string | null = null;
+    listed = false;
+    saving: string | null = null;
+    savingName: string | null = null;
+    renaming: { from: string; to: string; } | null = null;
+    openAfterImport: string | null = null;
+    activating = false;
+    closeAfterSave = false;
+    forceClose = false;
+    legacy = false;
+    live = true;
+    previewTimer = 0;
+    storeButtons: Map<string, HTMLElement> = new Map();
+    downloading: Set<string> = new Set();
+    storeLoaded = false;
+    storeRun = 0;
+
+    open(): void{
+        if (this.popup) return;
+        if (!hostSupportsCustomCss()){
+            kute.showNotification("The CSS Manager needs a newer Kute. Update Kute to use it.", false, 6);
+            return;
+        }
+        this.legacy = !hostSupportsManager();
+        this.popup = openManagerPopup(html, {
+            onMessage: (data) => this.receive(data),
+            canClose: () => this.canClose(),
+            onEscape: () => this.unzoom(),
+        });
+        const { shadow, signal } = this.popup;
+        signal.addEventListener("abort", () => {
+            clearTimeout(this.previewTimer);
+            customCss.revert();
+            this.popup = null;
+            this.editor = null;
+            this.editing = null;
+            this.loading = null;
+            this.listed = false;
+            this.saving = null;
+            this.renaming = null;
+            this.openAfterImport = null;
+            this.activating = false;
+            this.forceClose = false;
+            this.storeButtons.clear();
+            this.downloading.clear();
+            this.storeLoaded = false;
+            this.storeRun++;
+        });
+        this.$("#ccFolder").onclick = (): void => post("reveal", { name: this.editing ?? "" });
+        this.$("#ccOff").hidden = kute.settings.data.customCss !== false;
+
+        this.$("#ccStore").onclick = (): Promise<void> => this.openStore();
+        this.$("#ccStoreBack").onclick = (): void => this.$(".managerBody").classList.remove("storeOpen");
+
+        const live = this.$("#ccLive") as HTMLInputElement;
+        live.checked = this.live;
+        live.onchange = (): void => {
+            this.live = live.checked;
+            this.preview();
+        };
+
+        const overlay = (shadow.host as HTMLElement).parentElement as HTMLElement;
+        this.$("#ccPeek").onpointerdown = (event): void => {
+            event.preventDefault();
+            overlay.style.opacity = "0";
+            window.addEventListener("pointerup", () => {
+                overlay.style.opacity = "";
+            }, { once: true, signal });
+        };
+
+        if (this.legacy){
+            this.$(".managerPopup").classList.add("legacy");
+            this.$("#ccHint").textContent = "Loaded after all of Krunker's styles, so a rule with the same selector wins. " +
+                "Saved as Documents\\kute\\custom.css. Update Kute to keep several CSS files and switch between them.";
+            this.$("#ccEditor").textContent = "Loading...";
+            post("read");
+            return;
+        }
+
+        this.$("#ccNew").onclick = (): Promise<void> => this.create();
+        this.$("#ccPaste").onclick = (): Promise<void> => this.paste();
+        const input = this.$("#ccImportInput") as HTMLInputElement;
+        this.$("#ccImport").onclick = (): void => input.click();
+        input.onchange = (): void => {
+            this.importFiles([...input.files ?? []]);
+            input.value = "";
+        };
+        makeDropTarget(this.$("#ccFiles"), (dropped) => this.importFiles(dropped.map((entry) => entry.file)));
+        this.$("#ccEditor").textContent = "Loading...";
+        post("list");
+    }
+
+    async openStore(): Promise<void>{
+        if (!this.popup) return;
+        this.$(".managerBody").classList.add("storeOpen");
+        if (this.storeLoaded) return;
+        const run = ++this.storeRun;
+        const list = this.$("#ccStoreList");
+        list.innerHTML = "<div class=\"empty\">Loading the CSS Store...</div>";
+        let items: StoreItem[];
+        try {
+            const response = await fetch(storeUrl("index.json"), { signal: AbortSignal.any([this.popup.signal, AbortSignal.timeout(STORE_TIMEOUT)]) });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const catalog = await response.json();
+            if (!Array.isArray(catalog)) throw new Error("index.json is no list");
+            items = catalog.map(storeItem).filter(Boolean) as StoreItem[];
+        }
+        catch {
+            if (run === this.storeRun) list.innerHTML = "<div class=\"empty\">Could not load the CSS Store. Go back and open it again to retry.</div>";
+            return;
+        }
+        if (run !== this.storeRun) return;
+        this.storeLoaded = true;
+        this.storeButtons.clear();
+        list.textContent = "";
+        if (!items.length) list.innerHTML = "<div class=\"empty\">Nothing in the CSS Store yet.</div>";
+        for (const item of items) list.append(this.storeCard(item));
+        this.refreshStore();
+    }
+
+    zoom(src: string, name: string): void{
+        if (!this.popup) return;
+        this.unzoom();
+        const view = document.createElement("div");
+        view.id = "ccZoom";
+        view.innerHTML = "<div class=\"managerClose\">&times;</div>";
+        const image = document.createElement("img");
+        image.src = src;
+        image.alt = name;
+        view.append(image);
+        view.onclick = (event): void => {
+            if (event.target !== image) view.remove();
+        };
+        this.$(".managerPopup").append(view);
+    }
+
+    unzoom(): boolean{
+        const view = this.$("#ccZoom");
+        view?.remove();
+        return Boolean(view);
+    }
+
+    storeCard(item: StoreItem): HTMLElement{
+        const card = document.createElement("div");
+        card.className = "storeCard";
+        const shot = document.createElement("div");
+        shot.className = "storeShot";
+        shot.innerHTML = "<span class=\"mi\">image</span>";
+        if (item.preview){
+            const image = document.createElement("img");
+            image.alt = "";
+            image.title = "Click to enlarge";
+            image.loading = "lazy";
+            image.decoding = "async";
+            image.src = storeUrl(item.preview);
+            image.onerror = (): void => image.remove();
+            image.onclick = (): void => this.zoom(image.src, item.name);
+            shot.append(image);
+        }
+        const title = document.createElement("div");
+        title.className = "storeName";
+        title.textContent = item.name.replace(/\.css$/i, "");
+        const author = document.createElement("div");
+        author.className = "storeAuthor";
+        author.textContent = item.author ? `by ${item.author}` : "";
+        const button = document.createElement("div");
+        button.className = "btn small";
+        button.onclick = (): Promise<void> => this.download(item);
+        this.storeButtons.set(item.name, button);
+        card.append(shot, title, author, button);
+        return card;
+    }
+
+    async download(item: StoreItem): Promise<void>{
+        if (!this.popup || this.downloading.has(item.name) || this.hasFile(item.name)) return;
+        this.downloading.add(item.name);
+        this.refreshStore();
+        try {
+            const response = await fetch(storeUrl(item.file), { signal: AbortSignal.any([this.popup.signal, AbortSignal.timeout(STORE_TIMEOUT)]) });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const content = await response.text();
+            if (content.length > MAX_SIZE) throw new Error("larger than 4 MB");
+            post("import", { name: item.name, content });
+        }
+        catch (error){
+            if (!this.popup) return;
+            this.downloading.delete(item.name);
+            this.popup.showError(`Could not download ${item.name}: ${error instanceof Error ? error.message : error}`);
+            this.refreshStore();
+        }
+    }
+
+    hasFile(name: string): boolean{
+        const lower = name.toLowerCase();
+        return this.files.some((file) => file.name.toLowerCase() === lower);
+    }
+
+    refreshStore(): void{
+        for (const [name, button] of this.storeButtons){
+            const busy = this.downloading.has(name);
+            const have = !busy && this.hasFile(name);
+            button.classList.toggle("primary", !busy && !have);
+            button.classList.toggle("done", busy || have);
+            if (busy) button.textContent = "Downloading...";
+            else if (have) button.innerHTML = "<span class=\"mi\">check</span>Downloaded";
+            else button.innerHTML = "<span class=\"mi\">download</span>Download";
+        }
+    }
+
+    $(selector: string): HTMLElement{
+        return this.popup?.shadow.querySelector(selector) as HTMLElement;
+    }
+
+    receive(data: any): void{
+        if (typeof data.managerError === "string") this.popup?.showError(data.managerError);
+        if (this.legacy){
+            if (typeof data.customCss?.content === "string" && !this.editor){
+                this.active = LEGACY_FILE;
+                this.showEditor(LEGACY_FILE, data.customCss.content);
+            }
+            if (data.customCssSaved && this.saving !== null) this.saved(data.customCssSaved.error, LEGACY_FILE);
+            return;
+        }
+        if (data.cssFiles) this.updateList(data.cssFiles);
+        if (data.cssFile && data.cssFile.name === this.loading){
+            this.loading = null;
+            if (typeof data.cssFile.content === "string") this.showEditor(data.cssFile.name, data.cssFile.content);
+            else this.popup?.showError(`Could not read ${data.cssFile.name}`);
+        }
+        if (data.cssSaved && this.saving !== null && data.cssSaved.name === this.savingName) this.saved(data.cssSaved.error, data.cssSaved.name);
+        if (data.cssImported) this.imported(data.cssImported);
+        if (data.cssActivated){
+            this.activating = false;
+            if (data.cssActivated.error) this.popup?.showError(`Could not switch: ${data.cssActivated.error}`);
+            else customCss.markSaved(String(data.cssActivated.content ?? ""));
+            this.preview();
+        }
+    }
+
+    updateList(list: { files?: CssFile[]; active?: string | null; }): void{
+        this.files = Array.isArray(list.files) ? list.files : [];
+        const wasActive = this.active;
+        this.active = list.active ?? null;
+        if (wasActive && !this.active && !this.activating){
+            customCss.markSaved("");
+            this.preview();
+        }
+        const names = new Set(this.files.map((file) => file.name));
+        if (this.renaming && this.editing === this.renaming.from && names.has(this.renaming.to)){
+            this.editing = this.renaming.to;
+            const title = this.popup?.shadow.querySelector(".editorFile")?.firstChild;
+            if (title) title.textContent = this.editing;
+        }
+        this.renaming = null;
+        if (this.editing && !names.has(this.editing)) this.closeEditor();
+        if (!this.listed){
+            this.listed = true;
+            const first = this.active ?? this.files[0]?.name;
+            if (first) this.load(first);
+            else this.closeEditor();
+        }
+        this.renderList();
+        this.refreshStore();
+    }
+
+    renderList(): void{
+        const list = this.$("#ccList");
+        if (!list) return;
+        list.textContent = "";
+        if (!this.files.length){
+            const empty = document.createElement("div");
+            empty.className = "empty";
+            empty.textContent = "No CSS files yet. Make one with New, paste one, or import .css files.";
+            list.append(empty);
+        }
+        for (const file of this.files) list.append(this.row(file));
+        list.append(this.row(null));
+    }
+
+    row(file: CssFile | null): HTMLElement{
+        const name = file?.name ?? "";
+        const row = document.createElement("div");
+        row.className = "cssRow";
+        row.classList.toggle("none", !file);
+        row.classList.toggle("active", (this.active ?? "") === name);
+        row.classList.toggle("editing", Boolean(file) && this.editing === name);
+
+        const radio = document.createElement("div");
+        radio.className = "cssRadio";
+        radio.title = file ? "Use this one" : "No CSS";
+        radio.onclick = (event): void => {
+            event.stopPropagation();
+            this.activate(name);
+        };
+        const label = document.createElement("div");
+        label.className = "cssName";
+        label.textContent = file ? name : "None";
+        row.append(radio, label);
+        if (!file){
+            row.onclick = (): void => this.activate("");
+            return row;
+        }
+
+        const size = document.createElement("div");
+        size.className = "cssSize";
+        size.textContent = formatSize(file.size);
+        const actions = document.createElement("div");
+        actions.className = "cssActions";
+        for (const [icon, title, action, danger] of [
+            ["edit", "Rename", (): Promise<void> => this.rename(name), false],
+            ["delete", "Delete", (): Promise<void> => this.remove(name), true],
+        ] as const){
+            const button = document.createElement("div");
+            button.className = danger ? "iconBtn danger" : "iconBtn";
+            button.title = title;
+            button.innerHTML = `<span class="mi">${icon}</span>`;
+            button.onclick = (event): void => {
+                event.stopPropagation();
+                action();
+            };
+            actions.append(button);
+        }
+        row.append(size, actions);
+        row.onclick = (): Promise<void> => this.load(name);
+        return row;
+    }
+
+    async load(name: string): Promise<void>{
+        if (name === this.editing && this.editor) return;
+        if (!await this.discardChanges()) return;
+        this.loading = name;
+        post("get", { name });
+    }
+
+    showEditor(name: string, content: string): void{
+        const box = this.$("#ccEditor");
+        if (!box) return;
+        const { editor } = createEditorView(box, {
+            title: name,
+            content,
+            language: "css",
+            onSave: (closeAfter) => this.save(closeAfter),
+            onClose: () => this.popup?.close(),
+            onChange: () => {
+                clearTimeout(this.previewTimer);
+                this.previewTimer = setTimeout(() => this.preview(), PREVIEW_DELAY);
+            },
+        });
+        this.editor = editor;
+        this.editing = name;
+        this.renderList();
+        this.preview();
+    }
+
+    closeEditor(): void{
+        this.editor = null;
+        this.editing = null;
+        const box = this.$("#ccEditor");
+        if (box) box.innerHTML = "<div class=\"empty\">Pick a file below to edit it.</div>";
+        this.preview();
+    }
+
+    preview(): void{
+        const { editor } = this;
+        if (this.live && editor && (this.editing === this.active || editor.isDirty())) customCss.apply(editor.getValue());
+        else customCss.revert();
+    }
+
+    async discardChanges(): Promise<boolean>{
+        if (!this.editor?.isDirty() || !this.popup) return true;
+        return askConfirm(this.popup.shadow, "Unsaved changes", `Throw the changes to ${this.editing} away?`, "Discard");
+    }
+
+    save(closeAfter: boolean): void{
+        if (!this.editor || !this.editing || this.saving !== null) return;
+        this.closeAfterSave = closeAfter;
+        this.saving = this.editor.getValue();
+        this.savingName = this.editing;
+        if (this.legacy) window.chrome.webview.postMessage(`css-write ${JSON.stringify({ content: this.saving })}`);
+        else post("save", { name: this.editing, content: this.saving });
+    }
+
+    saved(error: string | null | undefined, name: string): void{
+        const content = this.saving ?? "";
+        this.saving = null;
+        if (error){
+            this.popup?.showError(`Could not save: ${error}`);
+            return;
+        }
+        if (name === this.active) customCss.markSaved(content);
+        if (name === this.editing) this.editor?.markSaved(content);
+        this.preview();
+        if (this.closeAfterSave) this.popup?.close();
+    }
+
+    activate(name: string): void{
+        if (name === (this.active ?? "") || this.activating) return;
+        this.activating = true;
+        post("activate", { name });
+    }
+
+    async create(): Promise<void>{
+        if (!this.popup) return;
+        const name = await askText(this.popup.shadow, "New CSS file", "theme.css", "Ends in .css");
+        if (!name) return;
+        this.openAfterImport = cssName(name);
+        post("import", { name: this.openAfterImport, content: "" });
+    }
+
+    async paste(): Promise<void>{
+        if (!this.popup) return;
+        let text = "";
+        try {
+            text = await navigator.clipboard.readText();
+        }
+        catch {
+            this.popup.showError("Could not read the clipboard.");
+            return;
+        }
+        if (!text.trim()){
+            this.popup.showError("The clipboard has no text in it. Copy the CSS first.");
+            return;
+        }
+        const name = await askText(this.popup.shadow, "Name for the pasted CSS", "pasted.css", "Ends in .css");
+        if (!name) return;
+        this.openAfterImport = cssName(name);
+        post("import", { name: this.openAfterImport, content: text });
+    }
+
+    async importFiles(files: File[]): Promise<void>{
+        const skipped: string[] = [];
+        for (const file of files){
+            if (!/\.css$/i.test(file.name) || file.size > MAX_SIZE){
+                skipped.push(file.name);
+                continue;
+            }
+            post("import", { name: file.name, content: await file.text() });
+        }
+        if (skipped.length) this.popup?.showError(`Not imported (only .css files up to 4 MB): ${skipped.join(", ")}`);
+    }
+
+    imported(result: { requested: string; name: string; error?: string | null; }): void{
+        if (this.downloading.delete(result.requested)) this.refreshStore();
+        if (result.error){
+            this.popup?.showError(`Could not add ${result.requested}: ${result.error}`);
+            return;
+        }
+        if (!this.active) this.activate(result.name);
+        if (result.requested === this.openAfterImport){
+            this.openAfterImport = null;
+            this.load(result.name);
+        }
+        else if (!this.editing) this.load(result.name);
+    }
+
+    async rename(name: string): Promise<void>{
+        if (!this.popup) return;
+        const value = await askText(this.popup.shadow, `Rename ${name}`, name, "Ends in .css");
+        if (!value) return;
+        const to = cssName(value);
+        if (to === name) return;
+        this.renaming = { from: name, to };
+        post("rename", { from: name, to });
+    }
+
+    async remove(name: string): Promise<void>{
+        if (!this.popup) return;
+        const sure = await askConfirm(this.popup.shadow, `Delete ${name}?`, "It goes to the recycle bin.", "Delete");
+        if (!sure) return;
+        post("delete", { name });
+    }
+
+    canClose(): boolean{
+        if (this.forceClose || !this.editor?.isDirty() || !this.popup) return true;
+        askConfirm(this.popup.shadow, "Unsaved changes", "Close and throw the changes away?", "Discard").then((discard) => {
+            if (!discard) return;
+            this.forceClose = true;
+            this.popup?.close();
+        });
+        return false;
+    }
+}
+
+const manager = new CssManager();
+
+export const open = (): void => manager.open();

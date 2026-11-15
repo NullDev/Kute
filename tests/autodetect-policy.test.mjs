@@ -1,23 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { accept, atLimit, capCandidates, choose, chooseCap, collapses, compare, experienceHolds, flooding, guard, headroom, refineCaps, screen, stalled, steady, steadyLimit, steadyRungs, summarize, wins } from "../src/frontend/modules/autoDetect/policy.js";
+import { accept, atLimit, capCandidates, choose, chooseCap, collapses, compare, experienceHolds, flooding, guard, headroom, refineCaps, screen, stalled, steady, steadyLimit, steadyRungs, summarize, wins } from "../src/frontend/modules/autoDetect/policy.ts";
 
 /**
- * @param {Partial<import("../src/frontend/modules/autoDetect/policy.js").Reading>} values
- * @return {import("../src/frontend/modules/autoDetect/policy.js").Reading}
+ * @param {Partial<import("../src/frontend/modules/autoDetect/policy.ts").Reading>} values
+ * @return {import("../src/frontend/modules/autoDetect/policy.ts").Reading}
  */
 function reading(values){
     return { fps: null, p99: null, maxMs: null, stallMs: null, taskP99: null, inputP99: null, ...values };
 }
 
 /**
- * @param {Partial<import("../src/frontend/modules/autoDetect/policy.js").Reading>} values
- * @return {import("../src/frontend/modules/autoDetect/policy.js").Reading[]} the same reading twice
+ * @param {Partial<import("../src/frontend/modules/autoDetect/policy.ts").Reading>} values
+ * @return {import("../src/frontend/modules/autoDetect/policy.ts").Reading[]} the same reading twice
  */
 const twice = (values) => [reading(values), reading(values)];
 /**
  * @param {number} fps
- * @param {Partial<import("../src/frontend/modules/autoDetect/policy.js").Reading>} [values]
- * @return {import("../src/frontend/modules/autoDetect/policy.js").Reading} a clean reading at this frame rate
+ * @param {Partial<import("../src/frontend/modules/autoDetect/policy.ts").Reading>} [values]
+ * @return {import("../src/frontend/modules/autoDetect/policy.ts").Reading} a clean reading at this frame rate
  */
 const clean = (fps, values = {}) => reading({ fps, p50: 1000 / fps, p99: 1000 / fps + 0.5, maxMs: 1000 / fps + 1, inputP99: 1000 / fps + 0.5, taskP99: 2, stallMs: 0, ...values });
 
@@ -75,7 +75,7 @@ describe("chooseCap", () => {
      * @param {number} p50
      * @param {number} taskP99
      * @param {number} [jitter] slowest frames beyond the typical one
-     * @return {import("../src/frontend/modules/autoDetect/policy.js").Reading[]} two readings a hair apart
+     * @return {import("../src/frontend/modules/autoDetect/policy.ts").Reading[]} two readings a hair apart
      */
     const at = (p50, taskP99, jitter = 0.5) => [
         reading({ fps: 1000 / p50, p50, p99: p50 + jitter, maxMs: p50 + jitter + 0.2, stallMs: 0, taskP99 }),
@@ -124,8 +124,8 @@ describe("chooseCap", () => {
     });
 
     /**
-     * @param {Partial<import("../src/frontend/modules/autoDetect/policy.js").Reading>} values
-     * @return {import("../src/frontend/modules/autoDetect/policy.js").Reading[]}
+     * @param {Partial<import("../src/frontend/modules/autoDetect/policy.ts").Reading>} values
+     * @return {import("../src/frontend/modules/autoDetect/policy.ts").Reading[]}
      */
     const both = (values) => [reading(values), reading(values)];
 

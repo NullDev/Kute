@@ -1,0 +1,427 @@
+import styles from "../../components/hudEditor.css";
+import panelHtml from "../../components/hudEditorPanel.html";
+import { kute } from "../../client";
+import { HUD_ELEMENTS, gameSettingOn, type HudElement } from "./elements";
+import { implicitShift, type HudEditor, type HudGeometry, type HudPlacement } from "./index";
+import { hiddenByPerformance } from "../../performance";
+
+const SNAP_PX = 6;
+const EMPTY_BOX = 24;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const round = (value: number): number => Math.round(value * 100) / 100;
+
+interface Item {
+    def: HudElement;
+    box: HTMLElement;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    empty: boolean;
+    drawn: DOMRect|null;
+}
+
+export async function openEditor(hud: HudEditor, geometry: HudGeometry): Promise<void>{
+    if (document.pointerLockElement) document.exitPointerLock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const { layout } = hud;
+
+    const editorStyle = document.createElement("style");
+    editorStyle.id = "kute_hudEditorCSS";
+    editorStyle.textContent = styles;
+    document.head.append(editorStyle);
+    document.documentElement.classList.add("kuteHudEdit");
+
+    const overlay = document.createElement("div");
+    overlay.id = "kuteHudEditor";
+    document.body.append(overlay);
+
+    const boxFor = (def: HudElement, rect: [number, number, number, number, number]): { x: number; y: number; w: number; h: number; empty: boolean; } => {
+        const [rx, ry, rw, rh, visible] = rect;
+        const empty = !visible || rw <= 0 || rh <= 0;
+        const oversizeX = rw > window.innerWidth * 0.5;
+        const oversizeY = rh > window.innerHeight * 0.5;
+
+        let w = empty ? EMPTY_BOX : rw;
+        let h = empty ? EMPTY_BOX : rh;
+        let x = rx;
+        let y = ry;
+        if (!empty && oversizeX){
+            w = def.size?.[0] ?? EMPTY_BOX;
+            x = rx + rw / 2 - w / 2;
+        }
+        if (!empty && oversizeY){
+            h = def.size?.[1] ?? EMPTY_BOX;
+            y = ry + rh / 2 - h / 2;
+        }
+        if (empty && rx > window.innerWidth / 2) x = rx - w;
+        if (empty && ry > window.innerHeight / 2) y = ry - h;
+
+        w = Math.min(w, window.innerWidth);
+        h = Math.min(h, window.innerHeight);
+        return { x: clamp(x, 0, window.innerWidth - w), y: clamp(y, 0, window.innerHeight - h), w, h, empty };
+    };
+
+    const spreadHandles = (all: Item[]): void => {
+        const placed = all.filter((item) => !item.empty);
+        for (const item of all){
+            if (!item.empty) continue;
+            for (let tries = 0; tries < 12; tries++){
+                const clash = placed.find(
+                    (other) => item.x < other.x + other.w && item.x + item.w > other.x && item.y < other.y + other.h && item.y + item.h > other.y,
+                );
+                if (!clash) break;
+                const down = item.y + item.h + 2;
+                if (down + item.h <= window.innerHeight) item.y = Math.min(clash.y + clash.h + 2, window.innerHeight - item.h);
+                else item.x = clamp(clash.x + clash.w + 2, 0, window.innerWidth - item.w);
+            }
+            placed.push(item);
+        }
+    };
+
+    const items: Item[] = [];
+    for (const def of HUD_ELEMENTS){
+        const rect = geometry.rects[def.key];
+        if (!rect) continue;
+        if (def.clientSetting && hiddenByPerformance(kute.settings.data, def.clientSetting)) continue;
+
+        const box = document.createElement("div");
+        box.className = "hudBox";
+        const label = document.createElement("div");
+        label.className = "hudLabel";
+        label.textContent = def.name;
+        box.append(label);
+        overlay.append(box);
+
+        items.push({ def, box, ...boxFor(def, rect), drawn: null });
+    }
+    spreadHandles(items);
+
+    let flip = false;
+    for (const item of items){
+        if (item.w > 60){
+            flip = false;
+        }
+        const below = flip && item.y + item.h + 20 < window.innerHeight;
+        item.box.classList.toggle("hudLabelBelow", below || item.y < 18);
+        flip = item.w > 60 ? false : !flip;
+    }
+
+    const guides: HTMLElement[] = [];
+    for (const kind of ["hudGuideV", "hudGuideH"]){
+        const guide = document.createElement("div");
+        guide.className = `hudGuide ${kind}`;
+        guide.style.display = "none";
+        overlay.append(guide);
+        guides.push(guide);
+    }
+
+    const shown = (def: HudElement): boolean => {
+        if (def.setting) return gameSettingOn(def.setting);
+        if (def.clientSetting) return kute.settings.data[def.clientSetting] !== false;
+        return true;
+    };
+
+    const placeOf = (key: string): HudPlacement => (layout[key] ??= {});
+
+    const moveStart = (key: string): HudPlacement => {
+        const place = { ...placeOf(key) };
+        const shift = implicitShift(key, layout);
+        if (shift) place.x = round((shift / window.innerWidth) * 100);
+        return place;
+    };
+
+    const offsetPx = (vw: number, vh: number): [number, number] => [
+        (vw / 100) * window.innerWidth * geometry.factor,
+        (vh / 100) * window.innerHeight * geometry.factor,
+    ];
+
+    const draw = (item: Item): void => {
+        const place = layout[item.def.key] ?? {};
+        const [offsetX, dy] = offsetPx(place.x ?? 0, place.y ?? 0);
+        const dx = offsetX + implicitShift(item.def.key, layout) * geometry.factor;
+        const scale = place.s ?? 1;
+        const width = item.w * scale;
+        const height = item.h * scale;
+        const left = item.x + item.w / 2 + dx - width / 2;
+        const top = item.y + item.h / 2 + dy - height / 2;
+
+        item.box.style.left = `${Math.round(left)}px`;
+        item.box.style.top = `${Math.round(top)}px`;
+        item.box.style.width = `${Math.round(width)}px`;
+        item.box.style.height = `${Math.round(height)}px`;
+        item.box.classList.toggle("hudOff", !shown(item.def));
+        item.box.classList.toggle("hudEmpty", item.empty);
+        item.drawn = new DOMRect(left, top, width, height);
+    };
+
+    const drawAll = (): void => {
+        for (const item of items) draw(item);
+    };
+
+    const applyLive = (): void => {
+        kute.settings.data.hudLayout = layout;
+        hud.apply();
+    };
+
+    const panelRows: Map<string, HTMLElement> = new Map();
+    const panelChecks: Map<string, HTMLInputElement> = new Map();
+
+    const refreshRows = (): void => {
+        for (const item of items){
+            const row = panelRows.get(item.def.key);
+            if (!row) continue;
+            const place = layout[item.def.key];
+            const scale = place?.s ?? 1;
+            const changed = !!place && ((place.x ?? 0) !== 0 || (place.y ?? 0) !== 0 || scale !== 1);
+            row.classList.toggle("hpChanged", changed);
+            const moved = row.querySelector(".hpMoved") as HTMLElement|null;
+            if (moved) moved.textContent = scale === 1 ? "" : `${Math.round(scale * 100)}%`;
+            const check = panelChecks.get(item.def.key);
+            if (check) check.checked = shown(item.def);
+        }
+    };
+
+    let selected: Item | null = null;
+
+    const highlight = (item: Item, on: boolean): boolean => item.box.classList.toggle("hudActive", on || selected === item);
+
+    const select = (item: Item | null): void => {
+        selected = item;
+        for (const other of items) other.box.classList.toggle("hudActive", other === item);
+    };
+
+    const moveTo = (item: Item, screenX: number, screenY: number, from: HudPlacement): void => {
+        const place = placeOf(item.def.key);
+        const factor = geometry.factor || 1;
+        place.x = round((from.x ?? 0) + (screenX / (window.innerWidth * factor)) * 100);
+        place.y = round((from.y ?? 0) + (screenY / (window.innerHeight * factor)) * 100);
+        applyLive();
+    };
+
+    const snap = (item: Item, start: DOMRect, dx: number, dy: number): [number, number] => {
+        const verticals = [0, window.innerWidth / 2, window.innerWidth];
+        const horizontals = [0, window.innerHeight / 2, window.innerHeight];
+        for (const other of items){
+            if (other === item || !other.drawn) continue;
+            verticals.push(other.drawn.left, other.drawn.left + other.drawn.width / 2, other.drawn.right);
+            horizontals.push(other.drawn.top, other.drawn.top + other.drawn.height / 2, other.drawn.bottom);
+        }
+
+        let bestX: { delta: number; at: number; } | null = null;
+        let bestY: { delta: number; at: number; } | null = null;
+        for (const edge of [start.left + dx, start.left + dx + start.width / 2, start.right + dx]){
+            for (const target of verticals){
+                const delta = target - edge;
+                if (Math.abs(delta) <= SNAP_PX && (bestX === null || Math.abs(delta) < Math.abs(bestX.delta))) bestX = { delta, at: target };
+            }
+        }
+        for (const edge of [start.top + dy, start.top + dy + start.height / 2, start.bottom + dy]){
+            for (const target of horizontals){
+                const delta = target - edge;
+                if (Math.abs(delta) <= SNAP_PX && (bestY === null || Math.abs(delta) < Math.abs(bestY.delta))) bestY = { delta, at: target };
+            }
+        }
+
+        guides[0].style.display = bestX ? "block" : "none";
+        if (bestX) guides[0].style.left = `${bestX.at}px`;
+        guides[1].style.display = bestY ? "block" : "none";
+        if (bestY) guides[1].style.top = `${bestY.at}px`;
+
+        return [dx + (bestX?.delta ?? 0), dy + (bestY?.delta ?? 0)];
+    };
+
+    for (const item of items){
+        const { box } = item;
+        let drag: { x: number; y: number; rect: DOMRect; from: HudPlacement; } | null = null;
+
+        box.onpointerdown = (event): void => {
+            event.preventDefault();
+            select(item);
+            box.setPointerCapture(event.pointerId);
+            box.classList.add("hudDragging");
+            drag = {
+                x: event.clientX,
+                y: event.clientY,
+                rect: item.drawn ?? box.getBoundingClientRect(),
+                from: moveStart(item.def.key),
+            };
+        };
+        box.onpointermove = (event): void => {
+            if (!drag || !box.hasPointerCapture(event.pointerId)) return;
+            const [dx, dy] = snap(item, drag.rect, event.clientX - drag.x, event.clientY - drag.y);
+            moveTo(item, dx, dy, drag.from);
+            drawAll();
+        };
+        const endDrag = (): void => {
+            if (!drag) return;
+            drag = null;
+            box.classList.remove("hudDragging");
+            guides[0].style.display = "none";
+            guides[1].style.display = "none";
+            refreshRows();
+        };
+        box.onpointerup = endDrag;
+        box.onpointercancel = endDrag;
+        box.onwheel = (event): void => {
+            event.preventDefault();
+            select(item);
+            const place = placeOf(item.def.key);
+            place.s = round(clamp((place.s ?? 1) + (event.deltaY < 0 ? 0.05 : -0.05), 0.3, 3));
+            applyLive();
+            drawAll();
+            refreshRows();
+        };
+    }
+
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%, -50%)";
+    overlay.append(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = panelHtml;
+
+    const element = (id: string): HTMLElement => (shadow.querySelector(`#${id}`) as HTMLElement);
+
+    const setVisible = (def: HudElement, value: boolean): void => {
+        if (def.setting){
+            window.setSetting(def.setting, value);
+        }
+        else if (def.clientSetting){
+            const id = def.clientSetting;
+            kute.settings.data[id] = value;
+            window.chrome.webview.postMessage(`set-config, ${id}, ${value}`);
+            const toggleName = `toggle${id.charAt(0).toUpperCase()}${id.slice(1)}` as const;
+            if (typeof kute.settings[toggleName] === "function") kute.settings[toggleName](value);
+            const input = document.querySelector(`#${id}`) as HTMLInputElement|null;
+            if (input) input.checked = value;
+        }
+        drawAll();
+        refreshRows();
+    };
+
+    const list = element("hpList");
+    let group = "";
+    for (const item of items){
+        const { def } = item;
+        if (def.group !== group){
+            ({ group } = def);
+            const header = document.createElement("div");
+            header.className = "hpGroup";
+            header.textContent = group.toUpperCase();
+            list.append(header);
+        }
+
+        const row = document.createElement("label");
+        row.className = "hpRow";
+        const name = document.createElement("span");
+        name.className = "hpName";
+        name.textContent = def.name;
+        if (def.note){
+            const note = document.createElement("span");
+            note.className = "hpNote";
+            note.textContent = ` ${def.note}`;
+            name.append(note);
+        }
+        const moved = document.createElement("span");
+        moved.className = "hpMoved";
+        const reset = document.createElement("span");
+        reset.className = "hpReset";
+        reset.textContent = "reset";
+        reset.title = "Put it back where Krunker had it";
+        reset.onclick = (event): void => {
+            event.preventDefault();
+            delete layout[def.key];
+            applyLive();
+            drawAll();
+            refreshRows();
+        };
+        row.append(name, moved, reset);
+
+        if (def.setting || def.clientSetting){
+            const check = document.createElement("input");
+            check.type = "checkbox";
+            check.checked = shown(def);
+            check.onchange = (): void => setVisible(def, check.checked);
+            row.append(check);
+            panelChecks.set(def.key, check);
+        }
+        row.onpointerenter = (): boolean => highlight(item, true);
+        row.onpointerleave = (): boolean => highlight(item, false);
+        list.append(row);
+        panelRows.set(def.key, row);
+    }
+
+    const panel = element("hpPanel");
+    const head = element("hpHead");
+    let panelDrag: { x: number; y: number; } | null = null;
+    head.onpointerdown = (event): void => {
+        const rect = host.getBoundingClientRect();
+        host.style.cssText = `position:fixed;left:${Math.round(rect.left)}px;top:${Math.round(rect.top)}px`;
+        head.setPointerCapture(event.pointerId);
+        panelDrag = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        panel.classList.add("hpBusy");
+    };
+    head.onpointermove = (event): void => {
+        if (!panelDrag) return;
+        host.style.left = `${Math.round(event.clientX - panelDrag.x)}px`;
+        host.style.top = `${Math.round(event.clientY - panelDrag.y)}px`;
+    };
+    head.onpointerup = (): void => {
+        panelDrag = null;
+        panel.classList.remove("hpBusy");
+    };
+
+    const controller = new AbortController();
+    const close = (): void => {
+        controller.abort();
+        overlay.remove();
+        editorStyle.remove();
+        document.documentElement.classList.remove("kuteHudEdit");
+        hud.save(layout);
+        hud.closed();
+    };
+
+    element("hpDone").onclick = close;
+    window.addEventListener(
+        "resize",
+        () => {
+            close();
+            kute.showNotification?.("The window changed size, open the HUD editor again", false, 5);
+        },
+        { signal: controller.signal },
+    );
+    element("hpReset").onclick = (): void => {
+        for (const key of Object.keys(layout)) delete layout[key];
+        applyLive();
+        drawAll();
+        refreshRows();
+    };
+
+    document.addEventListener(
+        "keydown",
+        (event) => {
+            if (event.key === "Escape"){
+                event.preventDefault();
+                event.stopPropagation();
+                close();
+                return;
+            }
+            if (!selected || !event.key.startsWith("Arrow")) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const step = event.shiftKey ? 10 : 1;
+            const dx = (event.key === "ArrowRight" ? step : 0) - (event.key === "ArrowLeft" ? step : 0);
+            const dy = (event.key === "ArrowDown" ? step : 0) - (event.key === "ArrowUp" ? step : 0);
+            moveTo(selected, dx, dy, moveStart(selected.def.key));
+            drawAll();
+            refreshRows();
+        },
+        { signal: controller.signal, capture: true },
+    );
+
+    drawAll();
+    refreshRows();
+}

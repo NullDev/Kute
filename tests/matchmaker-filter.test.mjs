@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_FILTER, GAMEMODES, readLobbies } from "../src/frontend/modules/matchmakerFilter.js";
+import { DEFAULT_FILTER, GAMEMODES, readLobbies } from "../src/frontend/modules/matchmakerFilter.ts";
 import list from "./fixtures/game-list.json";
 
 // a cut of the live game list of 2026-11-08: official ffa and tdm rooms, community rooms, krunker's parkour, raid and
@@ -7,13 +7,13 @@ import list from "./fixtures/game-list.json";
 const { games } = list;
 
 /**
- * @param {Partial<import("../src/frontend/modules/matchmakerFilter.js").MatchmakerFilter>} values
- * @return {import("../src/frontend/modules/matchmakerFilter.js").MatchmakerFilter}
+ * @param {Partial<import("../src/frontend/modules/matchmakerFilter.ts").MatchmakerFilter>} values
+ * @return {import("../src/frontend/modules/matchmakerFilter.ts").MatchmakerFilter}
  */
 const filter = (values = {}) => ({ ...DEFAULT_FILTER, ...values });
 
 /**
- * @param {import("../src/frontend/modules/matchmakerFilter.js").Lobby[]} lobbies
+ * @param {import("../src/frontend/modules/matchmakerFilter.ts").Lobby[]} lobbies
  * @return {string[]} ids of the lobbies that pass
  */
 const passing = (lobbies) => lobbies.filter((lobby) => lobby.passes).map((lobby) => lobby.id);
