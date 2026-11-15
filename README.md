@@ -79,7 +79,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Kute icons: our own counter, ammo, hitmarker, reticle and scope icons, each one optional, without touching your settings
 - [x] Discord Rich Presence
 - [x] CPU throttler (a last resort, see below)
-- [x] Autoupdater with a download progress window, plus changelogs
+- [x] Autoupdater with a download progress window, plus changelogs (the automatic script updates from GitHub can be turned off)
 - [x] Rebindable kute hotkeys
 - [x] Spotify overlay - by [@Liamoulee](https://github.com/Liamoulee)
 - [x] CSS Store - by [@Liamoulee](https://github.com/Liamoulee)
