@@ -3,7 +3,10 @@ import { kute } from "../client";
 import { request } from "../utils";
 import { matches } from "./hotkeys";
 import { OFFICIAL_MAPS, mapImageUrl } from "./maps";
-import { DEFAULT_FILTER, MAP_FILTER, MODE_FILTER, normalizeMap, readLobbies, type MatchmakerFilter, type Lobby } from "./matchmakerFilter";
+import {
+    DEFAULT_FILTER, MAP_FILTER, MAX_SKIP_RECENT, MODE_FILTER, normalizeMap, readLobbies, rememberLobby, skippedLobbies,
+    type MatchmakerFilter, type Lobby,
+} from "./matchmakerFilter";
 import { SEARCH_INTERVAL_MS, cooldownMs, nextRetryMs, retryAfterMs } from "./matchmakerPacing";
 
 const REGIONS: Record<string, string> = {
@@ -25,6 +28,17 @@ const POST_SCAN_PAUSE_MS = 180;
 const FOUND_HOLD_MS = 1200;
 const NOT_FOUND_HOLD_MS = 1100;
 const FAILED_HOLD_MS = 2000;
+const SCAN_LABEL = "Scanning lobbies...";
+const JOIN_KEY = "kute_mm_join";
+const RECENT_KEY = "kute_mm_recent";
+const JOIN_MAX_AGE_MS = 120000;
+const JOIN_WATCH_MS = 20000;
+const JOIN_POLL_MS = 250;
+const MAX_RECOVERIES = 3;
+const REJECTIONS: [RegExp, string][] = [
+    [/game is full/i, "Lobby was full, scanning..."],
+    [/game not found/i, "Lobby is gone, scanning..."],
+];
 const MIN_WAIT_MS = 1000;
 const COLLECT_WAIT_MS = 6000;
 const COLLECT_POLL_MS = 200;
@@ -46,6 +60,35 @@ class GameListError extends Error {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function readSession(key: string): any{
+    try {
+        return JSON.parse(sessionStorage.getItem(key) ?? "null");
+    }
+    catch {
+        return null;
+    }
+}
+
+function writeSession(key: string, value: unknown): void{
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    }
+    catch {
+        return;
+    }
+}
+
+function takeSession(key: string): any{
+    const value = readSession(key);
+    try {
+        sessionStorage.removeItem(key);
+    }
+    catch {
+        return value;
+    }
+    return value;
+}
 
 function mapIconUrl(map: string): string | null{
     const index = MAP_ICON_BY_NAME.get(normalizeMap(map));
@@ -98,6 +141,9 @@ class Matchmaker {
     pausedUntil = 0;
     lastFetch = 0;
     collecting: Promise<void> | null = null;
+    rejected: string[] = [];
+    skip: ReadonlySet<string> = new Set();
+    scanLabel = SCAN_LABEL;
     popup = document.createElement("div");
     status: HTMLDivElement;
     feed: HTMLDivElement;
@@ -146,6 +192,32 @@ class Matchmaker {
             true,
         );
         this.watchEndScreen();
+        this.watchJoin();
+    }
+
+    watchJoin(): void{
+        const marker = takeSession(JOIN_KEY);
+        const screen = document.getElementById("instructionsUpdate");
+        if (!screen || typeof marker?.id !== "string" || !Array.isArray(marker.rejected)) return;
+        if (Date.now() - Number(marker.at) > JOIN_MAX_AGE_MS || !location.href.includes(marker.id)) return;
+
+        const deadline = Date.now() + JOIN_WATCH_MS;
+        const timer = setInterval(() => {
+            if (document.pointerLockElement || Date.now() > deadline){
+                clearInterval(timer);
+                return;
+            }
+            if (screen.style.display === "none") return;
+            const text = screen.textContent;
+            const rejection = REJECTIONS.find(([pattern]) => pattern.test(text));
+            if (!rejection) return;
+            clearInterval(timer);
+
+            this.rejected = [...marker.rejected.filter((id: unknown) => typeof id === "string"), marker.id];
+            if (this.rejected.length > MAX_RECOVERIES || !kute.settings.data.matchmaker) return;
+            [, this.scanLabel] = rejection;
+            this.start().catch((error) => console.error("[kute] matchmaker:", error));
+        }, JOIN_POLL_MS);
     }
 
     watchEndScreen(): void{
@@ -275,7 +347,8 @@ class Matchmaker {
     async animateScan(run: number, lobbies: Lobby[], best?: Lobby): Promise<void>{
         const total = lobbies.length;
         if (total === 0) return;
-        this.status.textContent = "Scanning lobbies...";
+        this.status.textContent = this.scanLabel;
+        this.scanLabel = SCAN_LABEL;
 
         const maxEntries = Math.floor(MAX_ANIMATION_MS / BASE_TICK_MS);
         const step = total > maxEntries ? total / maxEntries : 1;
@@ -300,6 +373,7 @@ class Matchmaker {
         this.dismiss();
         window.chrome.webview.postMessage("throttle, off");
         window.chrome.webview.postMessage("drag, true");
+        writeSession(JOIN_KEY, { id, at: Date.now(), rejected: this.rejected });
         location.href = `https://krunker.io/?game=${id}`;
     }
 
@@ -319,7 +393,7 @@ class Matchmaker {
         }
         if (this.cancelled(run)) return "joined";
 
-        const live = new Map(readLobbies(games, filter).map((lobby) => [lobby.id, lobby]));
+        const live = new Map(readLobbies(games, filter, this.skip).map((lobby) => [lobby.id, lobby]));
         const ordered = [best, ...this.candidates.filter((lobby) => lobby !== best)];
         const open = ordered.find((lobby) => live.get(lobby.id)?.passes);
         if (!open) return "stale";
@@ -384,6 +458,10 @@ class Matchmaker {
         const { filter } = this;
         if (filter.animation) this.showPopup();
 
+        const recent = rememberLobby(readSession(RECENT_KEY) ?? [], new URLSearchParams(location.search).get("game"));
+        writeSession(RECENT_KEY, recent);
+        this.skip = skippedLobbies(recent, filter.skipRecent, this.rejected);
+
         let retryMs = 0;
         for (let first = true; ; first = false){
             const paused = this.pausedUntil - Date.now();
@@ -419,7 +497,7 @@ class Matchmaker {
 
     async attempt(run: number, filter: MatchmakerFilter, first: boolean): Promise<Outcome>{
         if (!first && this.popup.isConnected){
-            this.status.textContent = "Scanning lobbies...";
+            this.status.textContent = SCAN_LABEL;
             this.status.classList.remove("mm-fail");
             this.counter.textContent = "";
         }
@@ -428,7 +506,7 @@ class Matchmaker {
         let pings: Record<string, number>;
         try {
             const [games, regionPings] = await Promise.all([this.gameList(), request("ping-regions", "regionPings", FETCH_TIMEOUT_MS)]);
-            lobbies = readLobbies(games, filter);
+            lobbies = readLobbies(games, filter, this.skip);
             pings = regionPings ?? {};
         }
         catch (error){
@@ -659,6 +737,7 @@ class Matchmaker {
             element("mmMinPlayers").value = String(filter.minPlayers);
             element("mmMaxPlayers").value = String(filter.maxPlayers);
             element("mmMinTime").value = String(filter.minTime);
+            element("mmSkipRecent").value = String(filter.skipRecent);
             element("mmSortByPlayers").checked = filter.sortByPlayers;
             element("mmServerBrowser").checked = filter.serverBrowser;
             element("mmAnimation").checked = filter.animation;
@@ -691,6 +770,7 @@ class Matchmaker {
                 minPlayers: number("mmMinPlayers", 0, 7, DEFAULT_FILTER.minPlayers),
                 maxPlayers: number("mmMaxPlayers", 0, 7, DEFAULT_FILTER.maxPlayers),
                 minTime: number("mmMinTime", 0, 480, DEFAULT_FILTER.minTime),
+                skipRecent: number("mmSkipRecent", 0, MAX_SKIP_RECENT, DEFAULT_FILTER.skipRecent),
                 sortByPlayers: element("mmSortByPlayers").checked,
                 serverBrowser: element("mmServerBrowser").checked,
                 animation: element("mmAnimation").checked,
