@@ -23,36 +23,14 @@ export const textMinifyPlugin = {
     name: "textMinifyPlugin",
     setup(pluginBuild){
         pluginBuild.onLoad({ filter: /\.html$/ }, async(args) => {
-            let contents = await readFile(args.path, "utf8");
-
-            /** @type {string[]} */
-            const scripts = [];
-            let index = 0;
-
-            contents = contents.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, (_, scriptContent) => {
-                scripts.push(scriptContent);
-                return `___SCRIPT_${index++}___`;
-            });
-
-            for (let i = 0; i < scripts.length; i++){
-                const transformed = await transform(scripts[i], { loader: "js", minify: true });
-                scripts[i] = transformed.code;
-            }
-
-            contents = contents.replace(/\s+/g, " ").trim();
-
-            for (let i = 0; i < scripts.length; i++){
-                const minifiedCode = scripts[i];
-                contents = contents.replace(`___SCRIPT_${i}___`, `<script>${minifiedCode}</script>`);
-            }
-
-            return { loader: "text", contents };
+            const contents = await readFile(args.path, "utf8");
+            return { loader: "text", contents: contents.replace(/\s+/g, " ").trim() };
         });
     },
 };
 
 /**
- * `import code from "popup-script:./queue.js"` gives the minified source as a string, for code injected elsewhere.
+ * `import code from "popup-script:./queue.ts"` gives the minified source as a string, for code injected elsewhere.
  *
  * @type {import("esbuild").Plugin}
  */
