@@ -187,7 +187,7 @@ Object.defineProperty(window, "gameLoaded", {
         import("./modules/kuteIcons/index");
         import("./modules/menuTimer");
         import("./modules/hudEditor/index");
-        if (data.blockedChatWarning !== false) import("./modules/blockedChatWarning");
+        import("./modules/blockedChatWarning");
         if (data.hsSound) import("./modules/hsSound");
         if (data.betterChat) import("./modules/betterChat");
         if (data.chatLogs) import("./modules/chatLogs");
