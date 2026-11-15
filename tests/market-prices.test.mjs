@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
-import { TITLES } from "../src/frontend/modules/market/navigation.js";
+import { TITLES } from "../src/frontend/modules/market/navigation.ts";
 
 const storage = new Map();
 let events = 0;
@@ -7,7 +7,7 @@ globalThis.localStorage = { getItem: (k) => storage.get(k) ?? null, setItem: (k,
 globalThis.window = { dispatchEvent: () => { events++; } };
 globalThis.Event = class { constructor(type){ this.type = type; } };
 
-const { exportPrices, ownPrice, parsePrices, readPrices, setOwnPrice } = await import("../src/frontend/modules/market/prices.js");
+const { exportPrices, ownPrice, parsePrices, readPrices, setOwnPrice } = await import("../src/frontend/modules/market/prices.ts");
 
 beforeEach(() => { storage.clear(); events = 0; });
 

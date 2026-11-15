@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { lineSegments } from "../src/frontend/modules/market/chartData.js";
-import MarketChart from "../src/frontend/modules/market/chart.js";
+import { lineSegments } from "../src/frontend/modules/market/chartData.ts";
+import MarketChart from "../src/frontend/modules/market/chart.ts";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

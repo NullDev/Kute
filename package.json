@@ -21,7 +21,7 @@
         "lint": "eslint .",
         "test": "bun test ./tests",
         "lint:fix": "eslint . --fix",
-        "typecheck": "tsc -p jsconfig.json && tsc -p src/frontend/jsconfig.json && tsc -p server/tsconfig.json"
+        "typecheck": "tsc -p jsconfig.json && tsc -p src/frontend/tsconfig.json && tsc -p server/tsconfig.json"
     },
     "engines": {
         "bun": ">=1.4.2"

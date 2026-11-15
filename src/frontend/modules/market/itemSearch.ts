@@ -1,0 +1,123 @@
+import marketApi from "./api";
+import { esc, identity, money } from "./presentation";
+import type { SkinFacts as SearchItem } from "./types";
+
+export const itemSearch = (id: string, context: string, label: string, value = ""): string => `<div class="itemSearch"><input id="${id}" data-item-search="${context}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}Options" aria-label="${esc(label)}" placeholder="${esc(label)}" autocomplete="off" value="${esc(value)}"><div class="suggestions" id="${id}List" hidden></div></div>`;
+
+const hint = (item: SearchItem): string => {
+    if (item.lastSoldPrice !== null) return `${money(item.lastSoldPrice)}<small>last sold</small>`;
+    if (item.lowest !== null) return `${money(item.lowest)}<small>lowest ask</small>`;
+    return `${item.sales30d}<small>sold / 30D</small>`;
+};
+
+export default class ItemSearch {
+    root: ShadowRoot;
+    select: (item: SearchItem, context: string) => void;
+    browse: (q: string, context: string) => void;
+    input: HTMLInputElement | null;
+    list: HTMLElement | null;
+    items: SearchItem[];
+    active: number;
+    sequence: number;
+    timer: number;
+
+    constructor(root: ShadowRoot, signal: AbortSignal, select: (item: SearchItem, context: string) => void, browse: (q: string, context: string) => void){
+        this.root = root;
+        this.select = select;
+        this.browse = browse;
+        this.input = null;
+        this.list = null;
+        this.items = [];
+        this.active = -1;
+        this.sequence = 0;
+        this.timer = 0;
+        root.addEventListener("input", (event) => {
+            if (event.target instanceof HTMLInputElement && event.target.dataset.itemSearch) this.search(event.target);
+        }, { signal });
+        root.addEventListener("focusin", (event) => {
+            if (event.target !== this.input && !(event.target instanceof Element && this.list?.contains(event.target))) this.dismiss();
+        }, { signal });
+        root.addEventListener("pointerdown", (event) => {
+            if (!(event.target instanceof Element)) return;
+            if (this.list?.contains(event.target)) event.preventDefault();
+            else if (event.target !== this.input) this.dismiss();
+        }, { signal });
+        root.addEventListener("click", (event) => {
+            const button = event.target instanceof Element ? event.target.closest("[data-suggestion],[data-search-all]") : null;
+            if (!(button instanceof HTMLElement) || !this.list?.contains(button)) return;
+            if (button.dataset.suggestion !== undefined) this.choose(Number(button.dataset.suggestion));
+            else {
+                const q = this.input?.value.trim() ?? "";
+                const context = this.input?.dataset.itemSearch ?? "global";
+                this.dismiss();
+                this.browse(q, context);
+            }
+        }, { signal });
+        signal.addEventListener("abort", () => this.dismiss(), { once: true });
+    }
+
+    dismiss(): void{
+        clearTimeout(this.timer);
+        this.sequence++;
+        if (this.list) this.list.hidden = true;
+        this.input?.setAttribute("aria-expanded", "false");
+        this.input?.removeAttribute("aria-activedescendant");
+        this.input = null;
+        this.list = null;
+        this.items = [];
+        this.active = -1;
+    }
+
+    search(input: HTMLInputElement): void{
+        this.dismiss();
+        const q = input.value.trim();
+        if (!q) return;
+        const list = this.root.getElementById(`${input.id}List`) as HTMLElement | null;
+        if (!list) return;
+        this.input = input;
+        this.list = list;
+        list.hidden = false;
+        list.innerHTML = `<div class="suggestionStatus" role="status">Searching items...</div><div id="${input.id}Options" role="listbox" aria-label="Matching items" aria-busy="true"></div>`;
+        input.setAttribute("aria-expanded", "true");
+        const { sequence } = this;
+        this.timer = window.setTimeout(async() => {
+            let items: SearchItem[] | null = null;
+            try {
+                items = (await marketApi.search(q))?.items ?? null;
+            }
+            catch { items = null; }
+            if (sequence !== this.sequence || !input.isConnected || input.value.trim() !== q) return;
+            this.items = items?.slice(0, 8) ?? [];
+            list.innerHTML = `<div class="suggestionHeading">All items<span>Open an item</span></div><div id="${input.id}Options" role="listbox" aria-label="All items">${this.items.map((item, index) => `<button type="button" role="option" tabindex="-1" aria-selected="false" id="${input.id}Option${index}" data-suggestion="${index}">${identity(item)}<span class="suggestionValue">${hint(item)}</span></button>`).join("")}</div>${!items || !items.length ? `<div class="suggestionStatus" role="status">${items ? "No matching items" : "Search unavailable. Try typing again."}</div>` : ""}<button type="button" class="searchAll" data-search-all>View all results &#8594;</button>`;
+        }, 250);
+    }
+
+    choose(index: number): void{
+        const item = this.items[index];
+        const context = this.input?.dataset.itemSearch;
+        if (!item || !context) return;
+        this.dismiss();
+        this.select(item, context);
+    }
+
+    key(event: KeyboardEvent): boolean{
+        if (event.isComposing) return false;
+        const input = this.root.activeElement;
+        if (!(input instanceof HTMLInputElement) || !input.dataset.itemSearch) return false;
+        if (event.key === "Tab"){ this.dismiss(); return false; }
+        if (event.key === "Escape" && this.input){ this.dismiss(); event.preventDefault(); return true; }
+        if (event.key === "Enter" && this.active >= 0){ this.choose(this.active); event.preventDefault(); return true; }
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return false;
+        event.preventDefault();
+        if (this.input !== input){ this.search(input); return true; }
+        if (!this.items.length) return true;
+        let next = this.active + (event.key === "ArrowDown" ? 1 : -1);
+        if (this.active < 0 && event.key === "ArrowUp") next = this.items.length - 1;
+        this.active = (next + this.items.length) % this.items.length;
+        this.list?.querySelectorAll("[data-suggestion]").forEach((option, index) => option.setAttribute("aria-selected", String(index === this.active)));
+        const id = `${input.id}Option${this.active}`;
+        input.setAttribute("aria-activedescendant", id);
+        this.root.getElementById(id)?.scrollIntoView({ block: "nearest" });
+        return true;
+    }
+}
