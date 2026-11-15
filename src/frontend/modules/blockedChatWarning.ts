@@ -1,5 +1,3 @@
-import { kute } from "../client";
-
 const BLOCKED_WORDS = ["null", "client"];
 const ECHO_WINDOW_MS = 4000;
 const WARNING_COLOR = "#ff5a5a";
@@ -49,8 +47,7 @@ class BlockedChatWarning {
             if (this.pending.length === 0) return;
             for (const mutation of mutations) for (const node of mutation.addedNodes) this.check(node);
         });
-        kute.settings.toggleBlockedChatWarning = (enabled): void => this.toggle(enabled);
-        this.toggle(true);
+        this.attach();
     }
 
     onInput = (): void => {
@@ -84,12 +81,7 @@ class BlockedChatWarning {
         item.replaceChildren(warning);
     }
 
-    toggle(enabled: boolean): void{
-        this.observer.disconnect();
-        this.chatInput?.removeEventListener("input", this.onInput);
-        this.chatInput?.removeEventListener("keydown", this.onKey, { capture: true });
-        this.pending = [];
-        if (!enabled) return;
+    attach(): void{
         this.chatList = document.getElementById("chatList");
         const input = document.getElementById("chatInput");
         this.chatInput = input instanceof HTMLInputElement ? input : null;
