@@ -195,7 +195,6 @@ Object.defineProperty(window, "gameLoaded", {
         if (data.rankedAlert) import("./modules/rankedAlert");
         if (data.hpEnemyCounter) import("./modules/hpEnemyCounter");
         if (data.accountManager) import("./modules/accountManager");
-        if (data.market !== false && data.disableOnlineFeatures !== true) import("./modules/market/index").catch(() => {});
         if (data.showPing) import("./modules/showPing");
         if (data.realPing) import("./modules/realPing");
         if (data.exitButton) getElement("#clientExit").style.display = "flex";

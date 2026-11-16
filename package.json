@@ -19,7 +19,6 @@
         "build:linux": "bun run esbuild && cargo build -p kute --release --features packaged,auto-update,editor-ignore && bun postbuild.js release",
         "package:linux": "bun run build:linux && bun appimage.js",
         "lint": "eslint .",
-        "test": "bun test ./tests",
         "lint:fix": "eslint . --fix",
         "typecheck": "tsc -p jsconfig.json && tsc -p src/frontend/tsconfig.json && tsc -p server/tsconfig.json"
     },

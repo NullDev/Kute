@@ -76,15 +76,6 @@
         "category": "General",
         "defaultValue": true
     },
-    "market": {
-        "name": "Item Stats",
-        "id": "market",
-        "description": "Last sales, asking prices and supply of Krunker's items, on item pages and in the trade window. Your own prices stay on this PC. Reports your completed market buys to Kute to confirm sale prices.",
-        "type": "checkbox",
-        "category": "General",
-        "defaultValue": true,
-        "disabledBy": "disableOnlineFeatures"
-    },
     "obsCapturePlugin": {
         "name": "OBS Capture Plugin",
         "id": "obsCapturePlugin",
