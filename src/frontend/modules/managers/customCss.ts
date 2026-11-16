@@ -12,26 +12,6 @@ const hostSupportsManager = (): boolean => kute.hostFeatures?.includes("css-mana
 
 const cssName = (name: string): string => (/\.css$/i.test(name) ? name : `${name}.css`);
 
-const STORE_BASE = "https://raw.githubusercontent.com/kute-client/kute-css-store/main/";
-const STORE_TIMEOUT = 8000;
-
-type StoreItem = { name: string, author: string, file: string, preview: string };
-
-const storePath = (path: unknown): path is string => typeof path === "string" && path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
-
-const storeUrl = (path: string): string => STORE_BASE + path.split("/").map(encodeURIComponent).join("/");
-
-const storeItem = (entry: any): StoreItem | null => {
-    const name = typeof entry?.name === "string" ? entry.name.replace(/[\\/:*?"<>|]/g, "").trim() : "";
-    if (!name || !storePath(entry.file) || !/\.css$/i.test(entry.file)) return null;
-    return {
-        name: cssName(name),
-        author: typeof entry.author === "string" ? entry.author : "",
-        file: entry.file,
-        preview: storePath(entry.preview) ? entry.preview : "",
-    };
-};
-
 const post = (command: string, payload?: object): void => window.chrome.webview.postMessage(payload ? `css-${command} ${JSON.stringify(payload)}` : `css-${command}`);
 
 type CssFile = { name: string, size: number };
@@ -54,10 +34,6 @@ class CssManager {
     legacy = false;
     live = true;
     previewTimer = 0;
-    storeButtons: Map<string, HTMLElement> = new Map();
-    downloading: Set<string> = new Set();
-    storeLoaded = false;
-    storeRun = 0;
 
     open(): void{
         if (this.popup) return;
@@ -69,7 +45,6 @@ class CssManager {
         this.popup = openManagerPopup(html, {
             onMessage: (data) => this.receive(data),
             canClose: () => this.canClose(),
-            onEscape: () => this.unzoom(),
         });
         const { shadow, signal } = this.popup;
         signal.addEventListener("abort", () => {
@@ -85,16 +60,9 @@ class CssManager {
             this.openAfterImport = null;
             this.activating = false;
             this.forceClose = false;
-            this.storeButtons.clear();
-            this.downloading.clear();
-            this.storeLoaded = false;
-            this.storeRun++;
         });
         this.$("#ccFolder").onclick = (): void => post("reveal", { name: this.editing ?? "" });
         this.$("#ccOff").hidden = kute.settings.data.customCss !== false;
-
-        this.$("#ccStore").onclick = (): Promise<void> => this.openStore();
-        this.$("#ccStoreBack").onclick = (): void => this.$(".managerBody").classList.remove("storeOpen");
 
         const live = this.$("#ccLive") as HTMLInputElement;
         live.checked = this.live;
@@ -132,123 +100,6 @@ class CssManager {
         makeDropTarget(this.$("#ccFiles"), (dropped) => this.importFiles(dropped.map((entry) => entry.file)));
         this.$("#ccEditor").textContent = "Loading...";
         post("list");
-    }
-
-    async openStore(): Promise<void>{
-        if (!this.popup) return;
-        this.$(".managerBody").classList.add("storeOpen");
-        if (this.storeLoaded) return;
-        const run = ++this.storeRun;
-        const list = this.$("#ccStoreList");
-        list.innerHTML = "<div class=\"empty\">Loading the CSS Store...</div>";
-        let items: StoreItem[];
-        try {
-            const response = await fetch(storeUrl("index.json"), { signal: AbortSignal.any([this.popup.signal, AbortSignal.timeout(STORE_TIMEOUT)]) });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const catalog = await response.json();
-            if (!Array.isArray(catalog)) throw new Error("index.json is no list");
-            items = catalog.map(storeItem).filter(Boolean) as StoreItem[];
-        }
-        catch {
-            if (run === this.storeRun) list.innerHTML = "<div class=\"empty\">Could not load the CSS Store. Go back and open it again to retry.</div>";
-            return;
-        }
-        if (run !== this.storeRun) return;
-        this.storeLoaded = true;
-        this.storeButtons.clear();
-        list.textContent = "";
-        if (!items.length) list.innerHTML = "<div class=\"empty\">Nothing in the CSS Store yet.</div>";
-        for (const item of items) list.append(this.storeCard(item));
-        this.refreshStore();
-    }
-
-    zoom(src: string, name: string): void{
-        if (!this.popup) return;
-        this.unzoom();
-        const view = document.createElement("div");
-        view.id = "ccZoom";
-        view.innerHTML = "<div class=\"managerClose\">&times;</div>";
-        const image = document.createElement("img");
-        image.src = src;
-        image.alt = name;
-        view.append(image);
-        view.onclick = (event): void => {
-            if (event.target !== image) view.remove();
-        };
-        this.$(".managerPopup").append(view);
-    }
-
-    unzoom(): boolean{
-        const view = this.$("#ccZoom");
-        view?.remove();
-        return Boolean(view);
-    }
-
-    storeCard(item: StoreItem): HTMLElement{
-        const card = document.createElement("div");
-        card.className = "storeCard";
-        const shot = document.createElement("div");
-        shot.className = "storeShot";
-        shot.innerHTML = "<span class=\"mi\">image</span>";
-        if (item.preview){
-            const image = document.createElement("img");
-            image.alt = "";
-            image.title = "Click to enlarge";
-            image.loading = "lazy";
-            image.decoding = "async";
-            image.src = storeUrl(item.preview);
-            image.onerror = (): void => image.remove();
-            image.onclick = (): void => this.zoom(image.src, item.name);
-            shot.append(image);
-        }
-        const title = document.createElement("div");
-        title.className = "storeName";
-        title.textContent = item.name.replace(/\.css$/i, "");
-        const author = document.createElement("div");
-        author.className = "storeAuthor";
-        author.textContent = item.author ? `by ${item.author}` : "";
-        const button = document.createElement("div");
-        button.className = "btn small";
-        button.onclick = (): Promise<void> => this.download(item);
-        this.storeButtons.set(item.name, button);
-        card.append(shot, title, author, button);
-        return card;
-    }
-
-    async download(item: StoreItem): Promise<void>{
-        if (!this.popup || this.downloading.has(item.name) || this.hasFile(item.name)) return;
-        this.downloading.add(item.name);
-        this.refreshStore();
-        try {
-            const response = await fetch(storeUrl(item.file), { signal: AbortSignal.any([this.popup.signal, AbortSignal.timeout(STORE_TIMEOUT)]) });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const content = await response.text();
-            if (content.length > MAX_SIZE) throw new Error("larger than 4 MB");
-            post("import", { name: item.name, content });
-        }
-        catch (error){
-            if (!this.popup) return;
-            this.downloading.delete(item.name);
-            this.popup.showError(`Could not download ${item.name}: ${error instanceof Error ? error.message : error}`);
-            this.refreshStore();
-        }
-    }
-
-    hasFile(name: string): boolean{
-        const lower = name.toLowerCase();
-        return this.files.some((file) => file.name.toLowerCase() === lower);
-    }
-
-    refreshStore(): void{
-        for (const [name, button] of this.storeButtons){
-            const busy = this.downloading.has(name);
-            const have = !busy && this.hasFile(name);
-            button.classList.toggle("primary", !busy && !have);
-            button.classList.toggle("done", busy || have);
-            if (busy) button.textContent = "Downloading...";
-            else if (have) button.innerHTML = "<span class=\"mi\">check</span>Downloaded";
-            else button.innerHTML = "<span class=\"mi\">download</span>Download";
-        }
     }
 
     $(selector: string): HTMLElement{
@@ -304,7 +155,6 @@ class CssManager {
             else this.closeEditor();
         }
         this.renderList();
-        this.refreshStore();
     }
 
     renderList(): void{
@@ -484,7 +334,6 @@ class CssManager {
     }
 
     imported(result: { requested: string, name: string, error?: string | null }): void{
-        if (this.downloading.delete(result.requested)) this.refreshStore();
         if (result.error){
             this.popup?.showError(`Could not add ${result.requested}: ${result.error}`);
             return;
