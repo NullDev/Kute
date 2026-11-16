@@ -62,7 +62,8 @@ pub fn host_features() -> serde_json::Value {
         "recovery",
         "left-click-f20",
         "scroll-binds",
-        "bundle-updates-toggle"
+        "bundle-updates-toggle",
+        "js-flags"
     ])
 }
 
@@ -98,7 +99,8 @@ pub fn host_features() -> serde_json::Value {
         "diagnostics",
         "recovery",
         "left-click-f20",
-        "bundle-updates-toggle"
+        "bundle-updates-toggle",
+        "js-flags"
     ])
 }
 
