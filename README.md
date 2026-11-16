@@ -25,66 +25,25 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 
 ## :star: Features
 
-- [x] Runs on its own bundled Chromium (CEF), no browser or runtime install needed
-  - [x] Patched CEF: fixes the aim freeze and the GPU bottleneck stutter of uncapped clients
-  - [x] Every Chromium patch is a switch in the Engine settings, so any of them can be turned off on a PC where it does not help
-  - [x] Fix Audio Stutters (optional): sound that cuts out at high FPS costs the audio thread about 60 % less
-  - [x] Cache Game Scripts: Krunker's versioned scripts are served with no-store, so every lobby change downloaded and parsed 1.6 MB of them again; Kute keeps them cached, the main thread's wait per load dropped from about 800 ms to 16 ms
-- [x] Uncapped FPS with a DXGI present hook: waitable flip swapchain, frame pacing and a present FPS counter
-- [x] Exact FPS limiter inside Chromium's compositor (our patch): frames start on a fixed grid and reach the screen as soon as they are drawn
+- [x] Runs on its own bundled, patched Chromium (CEF): fixes the aim freeze and the stutter of uncapped clients
+- [x] Uncapped FPS with a DXGI present hook and an exact FPS limiter inside Chromium's compositor
 - [x] **Proper** Raw input (100%)
-- [x] Increased performance tweaks (chromium & CEF flags, game settings, system optimizations)
-- [x] Auto-Detect Best Settings: Client benchmarks your PC and automatically selects the optimal settings for performance and stability. Can be reverted at any time
-- [x] Disable & hide all non-performance settings: one switch turns off every cosmetic feature and hides its settings, switch it back and your choices return
-- [x] Laptops with two graphics chips are recognized: Kute picks the fast one in Windows' graphics settings once, and starts without the swapchain hook there. On Linux, NVIDIA PRIME render offload puts the game on the NVIDIA chip
-- [x] Laptop Power Boost (optional): a plugged in laptop runs on Windows' Best performance mode while Kute is open, and gets its own mode back after
-- [x] NVIDIA driver caps lifted for Kute only: its own driver profile
-- [x] Selectable graphics backend (ANGLE: D3D11, D3D11on12, OpenGL, Vulkan) and color profile
-- [x] Optimized URL blocklist (only ~50 entries, fully customizable), custom Chromium flags
-- [x] Resource swapper with an in-client manager: shows which game files your swaps replace, drag'n'drop & built-in editor. CSS swaps apply instantly, and your swaps win over the built-in blocklist
-- [x] Classic menu (optional): the Season 9 menu layout, with every new Season 10 button and feature still in it
-- [x] Cleaner menu (optional): hides the store ad, live streams, featured maps, the "Popular Now" row and other promos in the menu, in the regular and the classic menu. The logo, every button and the match info stay
-- [x] CSS Manager: keep several CSS files (write them, paste them or import them) and switch between them, with a syntax highlighted editor and live preview, always applied on top of Krunker's own styles
-- [x] Kute CSS (optional): Kute's own look for the whole client, menus, settings, every window and popup, the social window and the HUD, with a few cats
-- [x] Motion blur (optional): a slight blur while you turn the camera, the HUD stays sharp
-- [x] Custom sky (optional): a built-in preset, your own color gradient or your own image as the sky of every map
-- [x] All settings togglable
-- [x] Export and import Kute's settings (client settings, HUD positions, matchmaker filters, hotkeys) as one file, for a second PC or a fresh install
-- [x] Diagnostics Report
-- [x] Safe mode and crash finder
-- [x] Battle pass claim-all
-- [x] Userscripts (Crankshaft and idkr formats) with an in-client manager. Ships with example scripts, off by default: Class Roulette and Quick Sell by Rarity
-- [x] Mod compatibility: mods, lobby and invite links open in the game window instead of a second one that would end your match
-- [x] One-click mod download: a download button on every mod in Krunker's Mods window saves its zip to your Downloads folder
-- [x] OBS capture plugin (shared texture game capture plus a dedicated audio window)
-- [x] Officially supported by Medal.tv
-- [x] Encrypted Account Manager: drag accounts into your order, Ctrl+Alt+1, 2 and 3 log in the first three (rebindable)
-- [x] Match end message per account (optional): Krunker's end message is remembered for each account, so an alt never sends your main's message. An account without one sends nothing
-- [x] Queue ranked without the game open, with a match found sound you can turn down or swap for your own
-- [x] Better ranked with ELO system
-- [x] Find out your real ping to the servers
-- [x] Real pings in Find Game: every server shows its region's ping, and the old browser layout sorts regions fastest first
-- [x] Ranked match alert (optional): when Krunker's ranked queue finds a match while you are tabbed out, Kute comes to the front or flashes in the taskbar
-- [x] Matchmaker: F6 joins the lowest ping lobby that fits your filters (region, mode, map, players, time left), can keep searching until one opens up, moves on when the lobby it picked is full, skips the lobbies you were in last and collects double XP and rewards when a match ends
-- [x] Better chat
-- [x] Chat logs: the last 2000 chat lines, kept across lobbies, to filter, search and copy (F1, rebindable)
-- [x] Blocked message warning: Krunker silently drops chat messages with certain words (known so far: "null" and "client"). Kute shows a red note in place of the message nobody else received
-- [x] Hardpoint enemy counter
-- [x] Nuke counter: your career nuke total in game, with an optional goal
-- [x] Keystrokes: your bound movement keys and mouse in the HUD, lit while pressed, with a ring that shows which way the mouse moves
-- [x] HUD editor: drag, resize and hide every in-game HUD element and the menu timer, snapping included
-- [x] Rank progress
-- [x] Clan colors
-- [x] Kute badge (one setting turns off every Kute online feature, nothing is sent then)
-- [x] Kute icons: our own counter, ammo, hitmarker, reticle and scope icons, each one optional, without touching your settings
+- [x] Auto-Detect Best Settings: benchmarks your PC and only keeps what measurably runs better
+- [x] Faster lobby changes: Krunker's scripts stay cached
+- [x] Laptop support: hybrid graphics detection and Power Boost
+- [x] Resource swapper, userscripts (Crankshaft and idkr formats) and CSS manager, each with an in-client manager
+- [x] Matchmaker with filters and real pings in Find Game
+- [x] Queue ranked without the game open, ranked match alert, rank progress with ELO
+- [x] Encrypted Account Manager
+- [x] HUD editor, keystrokes, better chat and chat logs
+- [x] Classic menu, cleaner menu, Kute CSS, motion blur, custom sky, Kute icons
+- [x] OBS capture plugin, officially supported by Medal.tv
 - [x] Discord Rich Presence
-- [x] CPU throttler (a last resort, see below)
-- [x] Autoupdater with a download progress window, plus changelogs (the automatic script updates from GitHub can be turned off)
-- [x] Rebindable kute hotkeys
+- [x] Autoupdater, diagnostics report, safe mode and crash finder
+- [x] Every feature and every Chromium patch is a setting you can turn off
 - [x] Spotify overlay - by [@Liamoulee](https://github.com/Liamoulee)
 - [x] CSS Store - by [@Liamoulee](https://github.com/Liamoulee)
-- [ ] BetterKDR™️ (coming soon)
-- [x] and more...
+- [x] and more: [the full list is on the website](https://kute.lol/#features)
 
 <hr>
 
