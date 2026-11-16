@@ -3,14 +3,12 @@ pub const UPDATE_URL: &str = "https://api.github.com/repos/NullDev/Kute/releases
 pub const RELEASE_PAGE_URL: &str = "https://github.com/NullDev/Kute/releases/latest";
 #[cfg(windows)]
 pub const INSTALLER_ASSET: &str = "kute-setup-x86_64.msi";
-// sorts after INSTALLER_ASSET: exes up to 0.1.17 run assets[0] as the installer
 #[cfg(target_os = "linux")]
 pub const APPIMAGE_ASSET: &str = "kute-x86_64.AppImage";
 pub const RELEASE_DOWNLOAD_PREFIX: &str = "https://github.com/NullDev/Kute/releases/download/";
 #[cfg(windows)]
 pub const PORTABLE_MARKER: &str = "portable.flag";
 pub const API_URL: &str = "https://kute.lol/api";
-// any page script can post open-url, keep this short. trailing slash so look-alike domains don't match
 pub const OPEN_URL_ALLOWED: [&str; 4] = ["https://github.com/", "https://kute.lol/", "https://discord.com/invite/", "https://krunker.io/"];
 pub const JS_VERSION_URL: &str = "https://raw.githubusercontent.com/NullDev/Kute/master/target/bundle_version";
 pub const JS_BUNDLE_URL: &str = "https://raw.githubusercontent.com/NullDev/Kute/master/target/bundle.js";
@@ -62,7 +60,6 @@ pub const DEFAULT_BLOCKLIST: &str = r#"[
   "*://krunker.io/libs/anzu.js*"
 ]"#;
 
-// the cat models, blocked while "disableCats" is on
 pub const CAT_BLOCKLIST: &[&str] = &[
     "*://user-assets.krunker.io/61822/model.obj*",
     "*://user-assets.krunker.io/61818/model.obj*",
@@ -75,11 +72,6 @@ pub const CAT_BLOCKLIST: &[&str] = &[
     "*://user-assets.krunker.io/61823/model.obj*",
 ];
 
-// checked against chromium 151.0.7922.174, recheck on a cef bump
-// --disable-stack-profiler: unbranded builds count as local builds, which sample stacks in the browser, gpu and some renderers
-// --disable-gpu-process-for-dx12-info-collection: else chromium starts a second gpu process 120 s in, only for its own statistics
-// --gpu-program-cache-size-kb / --gpu-disk-cache-size-kb: the ANGLE program binary cache, 6 MB by default and full after one session;
-//   a new player's first draw links 2 programs, 120 ms cold against 9 ms with the cache warm (three r186 links on first sight)
 pub const DEFAULT_FLAGS: &str = r#"[
   "--disable-features=NativeNotifications,MediaRouter,CalculateNativeWinOcclusion,HappinessTrackingSurveysForDesktopDemo,HardwareMediaKeyHandling",
   "--disable-backgrounding-occluded-windows",
@@ -120,3 +112,5 @@ pub const DEFAULT_FLAGS: &str = r#"[
   "--disable-component-update",
   "--autoplay-policy=no-user-gesture-required"
 ]"#;
+
+pub const WIDE_INLINE_CACHES: &str = "--max-valid-polymorphic-map-count=16 --fast-properties-soft-limit=128";
