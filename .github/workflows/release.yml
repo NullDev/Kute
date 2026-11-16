@@ -92,25 +92,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Derive the market key
-        id: market
-        shell: pwsh
-        env:
-          KUTE_MARKET_MASTER: ${{ secrets.KUTE_MARKET_MASTER }}
-        run: |
-          if ($env:KUTE_MARKET_MASTER) {
-            $hmac = [System.Security.Cryptography.HMACSHA256]::new([System.Text.Encoding]::UTF8.GetBytes($env:KUTE_MARKET_MASTER))
-            $key = ($hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("${{ steps.version.outputs.version }}")) | ForEach-Object { $_.ToString("x2") }) -join ""
-            Write-Host "::add-mask::$key"
-            Add-Content $env:GITHUB_OUTPUT "key=$key"
-            Write-Host "market key derived for ${{ steps.version.outputs.version }}"
-          } else {
-            Write-Host "::warning::KUTE_MARKET_MASTER is not set, this build cannot use the market"
-          }
-
       - name: Build installer
-        env:
-          KUTE_MARKET_KEY: ${{ steps.market.outputs.key }}
         run: bun run package
 
       - name: Upload installer artifact
@@ -242,25 +224,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # same derivation as the windows job, both builds carry one version and so one key
-      - name: Derive the market key
-        id: market
-        env:
-          KUTE_MARKET_MASTER: ${{ secrets.KUTE_MARKET_MASTER }}
-          VERSION: ${{ needs.release.outputs.version }}
-        run: |
-          if [ -n "$KUTE_MARKET_MASTER" ]; then
-            key=$(printf '%s' "$VERSION" | openssl dgst -sha256 -hmac "$KUTE_MARKET_MASTER" | awk '{print $NF}')
-            echo "::add-mask::$key"
-            echo "key=$key" >> "$GITHUB_OUTPUT"
-            echo "market key derived for $VERSION"
-          else
-            echo "::warning::KUTE_MARKET_MASTER is not set, this build cannot use the market"
-          fi
-
       - name: Build AppImage
-        env:
-          KUTE_MARKET_KEY: ${{ steps.market.outputs.key }}
         run: bun run package:linux
 
       - name: Upload AppImage artifact

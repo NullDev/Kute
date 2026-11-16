@@ -36,9 +36,6 @@ pub fn host_features() -> serde_json::Value {
     serde_json::json!([
         "matchmaker",
         "dev-proof",
-        "market-attest",
-        "history-capture",
-        "market-capture",
         "krunker-links",
         "kute-icons",
         "script-manager",
@@ -74,9 +71,6 @@ pub fn host_features() -> serde_json::Value {
     serde_json::json!([
         "matchmaker",
         "dev-proof",
-        "market-attest",
-        "history-capture",
-        "market-capture",
         "krunker-links",
         "kute-icons",
         "script-manager",
