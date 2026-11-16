@@ -14,9 +14,8 @@ fn main() {
     let toml: toml::Value = toml::from_str(&toml_content).unwrap();
     let package_version = toml["package"]["version"].as_str().unwrap();
     let js_bundle_version = toml["package"]["metadata"]["js_bundle_version"].as_str().unwrap();
-    let description = toml["package"]["description"].as_str().unwrap();
 
-    embed_version_resource(package_version, "Kute", description, "kute.exe", VFT_APP);
+    embed_version_resource(package_version, "Kute", "Kute", "kute.exe", VFT_APP);
 
     let dest_path = env::current_dir().unwrap().join("target/bundle_version");
     fs::write(dest_path, js_bundle_version).unwrap();
@@ -32,7 +31,6 @@ fn main() {
         fs::write(wxs_path, updated_wxs).unwrap();
     }
 
-    // libcef.so ships next to the binary
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
         println!("cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN");
     }
@@ -43,7 +41,6 @@ fn main() {
     println!("cargo:rerun-if-changed=resources/kute-manifest.rc");
     println!("cargo:rerun-if-changed=resources/client.rc");
     println!("cargo:rerun-if-changed=resources/version_resource.rs");
-    // the .rc only names the icon
     println!("cargo:rerun-if-changed=resources/kute.ico");
     println!("cargo:rerun-if-changed=resources/installer_script.wxs");
     println!("cargo:rerun-if-changed=target/bundle.js");
