@@ -648,6 +648,16 @@
         "needsRestart": true,
         "hostFeature": "cef-patches"
     },
+    "wideInlineCaches": {
+        "name": "Wide Inline Caches",
+        "id": "wideInlineCaches",
+        "description": "V8 flag: tracks 16 object shapes per property access instead of 4, which Krunker's obfuscated code needs. Off uses V8's default",
+        "type": "checkbox",
+        "category": "Engine",
+        "defaultValue": true,
+        "needsRestart": true,
+        "hostFeature": "js-flags"
+    },
     "patchHighQoS": {
         "name": "Game Process at High QoS",
         "id": "patchHighQoS",
