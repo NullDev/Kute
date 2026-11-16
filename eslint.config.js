@@ -219,9 +219,4 @@ export default [{
         "@typescript-eslint/no-explicit-any": 0,
         "@typescript-eslint/no-inferrable-types": "error",
     },
-}, {
-    files: ["src/frontend/modules/market/views/*.ts"],
-    rules: {
-        indent: [2, 4, { SwitchCase: 1, ignoredNodes: ["TaggedTemplateExpression[tag.name='html'] *"] }],
-    },
 }];
