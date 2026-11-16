@@ -30,6 +30,7 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] **Proper** Raw input (100%)
 - [x] Auto-Detect Best Settings: benchmarks your PC and only keeps what measurably runs better
 - [x] Faster lobby changes: Krunker's scripts stay cached
+- [x] Wide inline caches: V8 tuned for Krunker's obfuscated code, about 10 % more FPS in a match
 - [x] Laptop support: hybrid graphics detection and Power Boost
 - [x] Resource swapper, userscripts (Crankshaft and idkr formats) and CSS manager, each with an in-client manager
 - [x] Matchmaker with filters and real pings in Find Game

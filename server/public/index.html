@@ -334,6 +334,7 @@
             <div><span></span><b>Uncapped FPS</b><p>Removes the refresh rate cap.</p></div>
             <div><span></span><b>Fix Audio Stutters</b><p>Optional: keeps the game's 3D sound from eating the audio thread at high FPS.</p></div>
             <div><span></span><b>Cache Game Scripts</b><p>Krunker tells the browser to never cache its scripts, so every lobby change downloads and parses them again. Kute keeps them, a lobby change blocks about 16&nbsp;ms instead of 800&nbsp;ms.</p></div>
+            <div><span></span><b>Wide Inline Caches</b><p>Krunker's obfuscated code reads every property in a way V8 gives up on early. Kute lets V8 track 16 object shapes per access instead of 4: about 10&nbsp;% more FPS in a match.</p></div>
             <div><span></span><b>Laptop setup</b><p>Two graphics chips are recognized: Kute picks the fast one and skips the swap chain hook there. Plugged in, it runs on Best performance and puts your power mode back after. On Linux, NVIDIA PRIME offload renders on the NVIDIA chip.</p></div>
             <div><span></span><b>NVIDIA profile</b><p>A driver profile for Kute alone lifts a global Max Frame Rate or forced V-Sync. Yours to change.</p></div>
             <div><span></span><b>Exact FPS limit</b><p>Held inside Chromium's compositor by our own patch, so the CPU idles between frames. Works with or without the swap chain hook.</p></div>
