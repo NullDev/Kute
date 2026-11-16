@@ -42,7 +42,6 @@ Kute is a high-performance Krunker client designed to enhance your gaming experi
 - [x] Autoupdater, diagnostics report, safe mode and crash finder
 - [x] Every feature and every Chromium patch is a setting you can turn off
 - [x] Spotify overlay - by [@Liamoulee](https://github.com/Liamoulee)
-- [x] CSS Store - by [@Liamoulee](https://github.com/Liamoulee)
 - [x] and more: [the full list is on the website](https://kute.lol/#features)
 
 <hr>
@@ -100,13 +99,6 @@ Kute has it's own fully documented API Client:
 - https://github.com/NullDev/krapio
 - https://nulldev.github.io/krapio/docs/
 - https://www.npmjs.com/package/krapio
-
-<hr>
-
-## 🛒 CSS Store
-
-You can submit your themes as PR to: <br>
-https://github.com/NullDev/kute-css-store
 
 <hr>
 
