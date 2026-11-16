@@ -144,6 +144,22 @@ code {
   text-transform: uppercase;
 }
 
+.ai-note {
+  position: relative;
+  z-index: 30;
+  margin: 0;
+  padding: 0.55rem var(--gutter);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  font: 0.78rem/1.4 var(--mono);
+  text-align: center;
+}
+
+.ai-note a {
+  color: var(--cyan);
+  text-decoration: underline;
+}
+
 .topbar {
   position: relative;
   z-index: 30;
