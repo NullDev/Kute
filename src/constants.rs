@@ -113,4 +113,4 @@ pub const DEFAULT_FLAGS: &str = r#"[
   "--autoplay-policy=no-user-gesture-required"
 ]"#;
 
-pub const WIDE_INLINE_CACHES: &str = "--max-valid-polymorphic-map-count=16";
+pub const WIDE_INLINE_CACHES: &str = "--max-valid-polymorphic-map-count=16 --fast-properties-soft-limit=128";
