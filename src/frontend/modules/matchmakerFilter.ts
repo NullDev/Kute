@@ -42,6 +42,7 @@ export interface MatchmakerFilter {
     animation: boolean;
     searchAfterMatch: boolean;
     collectRewards: boolean;
+    collectDoubleXp: boolean;
     keepSearching: boolean;
     skipRecent: number;
 }
@@ -60,6 +61,7 @@ export const DEFAULT_FILTER: MatchmakerFilter = {
     animation: true,
     searchAfterMatch: false,
     collectRewards: true,
+    collectDoubleXp: false,
     keepSearching: false,
     skipRecent: 1,
 };

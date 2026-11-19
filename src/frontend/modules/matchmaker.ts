@@ -240,19 +240,20 @@ class Matchmaker {
     }
 
     async afterMatch(endUI: HTMLElement, custom: boolean): Promise<void>{
-        if (this.filter.collectRewards && !this.collecting){
-            this.collecting = this.collect(endUI).finally(() => (this.collecting = null));
+        const { collectRewards, collectDoubleXp } = this.filter;
+        if ((collectRewards || collectDoubleXp) && !this.collecting){
+            this.collecting = this.collect(endUI, collectRewards, collectDoubleXp).finally(() => (this.collecting = null));
             await this.collecting;
         }
         if (custom || !this.filter.searchAfterMatch || endUI.style.display === "none") return;
         await this.start();
     }
 
-    async collect(endUI: HTMLElement): Promise<void>{
+    async collect(endUI: HTMLElement, rewardItems: boolean, doubleXpBonus: boolean): Promise<void>{
         const open = (): boolean => endUI.style.display !== "none";
         const deadline = Date.now() + COLLECT_WAIT_MS;
 
-        while (open() && Date.now() < deadline){
+        while (rewardItems && open() && Date.now() < deadline){
             const rewards = document.querySelector("#collectRewardsButtonContainer button.collect-rewards-button") as HTMLButtonElement | null;
             if (visible(rewards) && !rewards.disabled && rewards.getAttribute("aria-disabled") !== "true"){
                 rewards.click();
@@ -262,6 +263,7 @@ class Matchmaker {
             await sleep(COLLECT_POLL_MS);
         }
 
+        if (!doubleXpBonus) return;
         let doubleXp = document.getElementById("doubleXPButton");
         while (open() && !visible(doubleXp) && Date.now() < deadline){
             await sleep(COLLECT_POLL_MS);
@@ -743,6 +745,7 @@ class Matchmaker {
             element("mmAnimation").checked = filter.animation;
             element("mmSearchAfterMatch").checked = filter.searchAfterMatch;
             element("mmCollectRewards").checked = filter.collectRewards;
+            element("mmCollectDoubleXp").checked = filter.collectDoubleXp;
             element("mmKeepSearching").checked = filter.keepSearching;
             element("mmServerBrowser").disabled = filter.keepSearching;
         };
@@ -776,6 +779,7 @@ class Matchmaker {
                 animation: element("mmAnimation").checked,
                 searchAfterMatch: element("mmSearchAfterMatch").checked,
                 collectRewards: element("mmCollectRewards").checked,
+                collectDoubleXp: element("mmCollectDoubleXp").checked,
                 keepSearching: element("mmKeepSearching").checked,
             });
         };
