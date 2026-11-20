@@ -65,18 +65,42 @@ function sign(signtool, files){
     }
     if (pending.length === 0) return;
 
-    console.log(`Signing ${pending.length} file(s), enter the card PIN when Windows asks for it`);
-    const result = spawnSync(signtool, [
-        "sign",
-        "/n", SUBJECT,
-        "/fd", "sha256",
-        "/tr", TIMESTAMP_URL,
-        "/td", "sha256",
-        "/d", DESCRIPTION,
-        "/du", DESCRIPTION_URL,
-        ...pending,
-    ], { stdio: "inherit" });
-    if (result.status !== 0) throw new Error(`signtool exited with ${result.status ?? result.error}`);
+    const jsign = process.env.KUTE_SIGN_JSIGN;
+    const pinFile = process.env.KUTE_SIGN_PIN_FILE;
+
+    if (jsign && pinFile){
+        if (!fs.existsSync(jsign)) throw new Error(`KUTE_SIGN_JSIGN points at ${jsign}, which does not exist`);
+        if (!fs.existsSync(pinFile)) throw new Error(`KUTE_SIGN_PIN_FILE points at ${pinFile}, which does not exist`);
+
+        console.log(`Signing ${pending.length} file(s) with the PIN file`);
+        const result = spawnSync("java", [
+            "-jar", jsign,
+            "--storetype", "CRYPTOCERTUM",
+            "--storepass", `file:${pinFile}`,
+            "--alias", SUBJECT,
+            "--alg", "SHA-256",
+            "--tsaurl", TIMESTAMP_URL,
+            "--tsmode", "RFC3161",
+            "--name", DESCRIPTION,
+            "--url", DESCRIPTION_URL,
+            ...pending,
+        ], { stdio: "inherit" });
+        if (result.status !== 0) throw new Error(`jsign exited with ${result.status ?? result.error}`);
+    }
+    else {
+        console.log(`Signing ${pending.length} file(s), enter the card PIN when Windows asks for it`);
+        const result = spawnSync(signtool, [
+            "sign",
+            "/n", SUBJECT,
+            "/fd", "sha256",
+            "/tr", TIMESTAMP_URL,
+            "/td", "sha256",
+            "/d", DESCRIPTION,
+            "/du", DESCRIPTION_URL,
+            ...pending,
+        ], { stdio: "inherit" });
+        if (result.status !== 0) throw new Error(`signtool exited with ${result.status ?? result.error}`);
+    }
 
     const unsigned = pending.filter((file) => !isSigned(signtool, file));
     if (unsigned.length > 0) throw new Error(`No valid timestamped signature on: ${unsigned.join(", ")}`);
