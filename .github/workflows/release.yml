@@ -3,7 +3,6 @@ name: release
 on:
   workflow_dispatch:
     inputs:
-      # draft only: notes are written by hand, the updater only sees published releases
       mode:
         description: What to do with the built installer
         type: choice
@@ -29,13 +28,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build installer
+  build:
+    name: Build
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      # the bump commit the release is tagged on, empty for build only
-      commit: ${{ steps.commit.outputs.oid }}
+      bump: ${{ steps.version.outputs.bump }}
+      head: ${{ steps.version.outputs.head }}
 
     steps:
       - name: Checkout
@@ -45,7 +44,6 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      # edits the checkout only, the commit comes after the build
       - name: Bump version
         id: version
         shell: pwsh
@@ -53,9 +51,9 @@ jobs:
           $bump = if ("${{ inputs.mode }}" -eq "build only") { "none" } else { "${{ inputs.bump }}" }
           $version = ./.github/scripts/bump-version.ps1 -Bump $bump
           Add-Content $env:GITHUB_OUTPUT "version=$version"
-          Add-Content $env:GITHUB_OUTPUT "bumped=$($bump -ne 'none')"
+          Add-Content $env:GITHUB_OUTPUT "bump=$bump"
+          Add-Content $env:GITHUB_OUTPUT "head=$(git rev-parse HEAD)"
 
-      # fail before the long build if this version is already published, a draft is fine
       - name: Check that the version is not released yet
         if: inputs.mode != 'build only'
         shell: pwsh
@@ -82,30 +80,76 @@ jobs:
       - name: Install Ninja
         run: choco install ninja --no-progress -y
 
-      - name: Install WiX 6
-        shell: pwsh
-        run: |
-          dotnet tool install --global wix --version 6.0.2
-          Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.dotnet\tools"
-          wix extension add -g WixToolset.Util.wixext/6.0.2
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build
+        run: bun run build:auto-update
+
+      - name: Upload unsigned payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: kute-unsigned-payload-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: |
+            target/release/kute.exe
+            target/release/kute.pdb
+            target/release/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    name: Sign and package
+    needs: build
+    runs-on: [self-hosted, windows, kute-signing]
+    timeout-minutes: 120
+    outputs:
+      version: ${{ needs.build.outputs.version }}
+      commit: ${{ steps.commit.outputs.oid }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build.outputs.head }}
+          fetch-depth: 0
+
+      - name: Bump version
+        shell: pwsh
+        run: |
+          $version = ./.github/scripts/bump-version.ps1 -Bump "${{ needs.build.outputs.bump }}"
+          if ($version -ne "${{ needs.build.outputs.version }}") {
+            throw "This checkout bumps to $version, the build job built ${{ needs.build.outputs.version }}"
+          }
+
+      - name: Download unsigned payload
+        uses: actions/download-artifact@v8
+        with:
+          name: kute-unsigned-payload-${{ needs.build.outputs.version }}-${{ github.sha }}
+          path: target/release
+
+      - name: Sign the payload
+        run: bun sign.js payload
+
       - name: Build installer
-        run: bun run package
+        run: bun run installer
+
+      - name: Sign the installer
+        run: bun sign.js installer
+
+      - name: Build portable zip
+        run: bun portable.js
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7
         with:
-          name: kute-setup-x86_64-msi-${{ steps.version.outputs.version }}-${{ github.sha }}
+          name: kute-setup-x86_64-msi-${{ needs.build.outputs.version }}-${{ github.sha }}
           path: target/kute-setup-x86_64.msi
           retention-days: 7
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v7
         with:
-          name: kute-x86_64-portable-zip-${{ steps.version.outputs.version }}-${{ github.sha }}
+          name: kute-x86_64-portable-zip-${{ needs.build.outputs.version }}-${{ github.sha }}
           path: target/kute-x86_64-portable.zip
           retention-days: 7
 
@@ -117,7 +161,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $head = git rev-parse HEAD
-          if ("${{ steps.version.outputs.bumped }}" -ne "True") {
+          if ("${{ needs.build.outputs.bump }}" -eq "none") {
             Add-Content $env:GITHUB_OUTPUT "oid=$head"
             exit 0
           }
@@ -143,7 +187,7 @@ jobs:
             variables = @{
               input = @{
                 branch = @{ repositoryNameWithOwner = $env:GITHUB_REPOSITORY; branchName = "master" }
-                message = @{ headline = "bump version to ${{ steps.version.outputs.version }}" }
+                message = @{ headline = "bump version to ${{ needs.build.outputs.version }}" }
                 expectedHeadOid = $head
                 fileChanges = @{ additions = $additions }
               }
@@ -165,16 +209,15 @@ jobs:
         if: inputs.mode != 'build only'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.build.outputs.version }}
           target_commitish: ${{ steps.commit.outputs.oid }}
-          name: ${{ steps.version.outputs.version }}
+          name: ${{ needs.build.outputs.version }}
           draft: true
           generate_release_notes: true
           files: |
             target/kute-setup-x86_64.msi
             target/kute-x86_64-portable.zip
 
-      # exes before the portable zip download assets[0] as the installer, and the api sorts assets by name
       - name: Check that the installer is the first asset
         if: inputs.mode != 'build only'
         shell: pwsh
@@ -189,11 +232,9 @@ jobs:
   appimage:
     name: Build AppImage
     needs: release
-    # the image's glibc is the oldest the AppImage runs on, 24.04 meant 2.39 and shut out ubuntu 22.04 and debian 12
     runs-on: ubuntu-22.04
 
     steps:
-      # the version the windows job bumped and tagged, so both builds carry the same number
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -209,7 +250,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # cef-dll-sys builds its wrapper with CMake and Ninja. apt hung twice for 15+ min on a release run, so only when missing
       - name: Install build tools
         timeout-minutes: 5
         env:
@@ -240,7 +280,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ needs.release.outputs.version }}" target/kute-x86_64.AppImage --clobber
 
-      # same rule as in the windows job, the AppImage must sort after the installer
       - name: Check that the installer is still the first asset
         if: inputs.mode != 'build only'
         env:
