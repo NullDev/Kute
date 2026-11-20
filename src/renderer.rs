@@ -2,10 +2,8 @@ use crate::{constants, debug_print, modules, utils};
 use cef::{rc::*, *};
 use std::{cell::RefCell, collections::HashMap};
 
-// "message" listeners per frame id
 thread_local! {
     static LISTENERS: RefCell<HashMap<String, Vec<V8Value>>> = RefCell::new(HashMap::new());
-    // the runner's load function per frame id, for scripts added or changed after the page load
     static SCRIPT_LOADERS: RefCell<HashMap<String, V8Value>> = RefCell::new(HashMap::new());
 }
 
@@ -13,17 +11,21 @@ fn frame_key(frame: &Frame) -> String {
     utils::cef_to_string(&frame.identifier())
 }
 
+#[cfg(feature = "auto-update")]
+fn downloaded_bundle_allowed() -> bool {
+    !modules::recovery::overrides().embedded_bundle && !utils::config("disableBundleUpdates", false)
+}
+
 fn bundle_source() -> String {
-    // bundle from the updater wins over the embedded one, except in safe mode and a test that switched it off
     #[cfg(all(feature = "auto-update", windows))]
-    if !modules::recovery::overrides().embedded_bundle
+    if downloaded_bundle_allowed()
         && let Ok(bundle) = std::fs::read_to_string(utils::exe_dir().join("resources").join("bundle.js"))
         && !bundle.is_empty()
     {
         return bundle;
     }
     #[cfg(all(feature = "auto-update", target_os = "linux"))]
-    if !modules::recovery::overrides().embedded_bundle
+    if downloaded_bundle_allowed()
         && let Some(bundle) = modules::updater::downloaded_bundle()
     {
         return bundle;
@@ -58,14 +60,11 @@ fn eval(context: &V8Context, code: &str, name: &str) {
     }
 }
 
-// bundle grabs the userscript registry from here, removed before page scripts run
 const REGISTRY_KEY: &str = "__kuteUserscripts";
 const CUSTOM_CSS_KEY: &str = "__kuteCustomCss";
 
-// runs before any page script. popups get theirs from handlers::on_after_created
 fn inject_scripts(frame: &Frame, context: &V8Context) {
     debug_print!("renderer: injecting into {}", utils::cef_to_string(&frame.url()));
-    // also with userscripts off, switching them on later loads them into this page
     let registry = v8_value_create_object(None, None);
     let global = context.global();
     if let (Some(global), Some(registry)) = (&global, &registry) {
@@ -75,7 +74,6 @@ fn inject_scripts(frame: &Frame, context: &V8Context) {
             V8Propertyattribute::default(),
         );
     }
-    // handed over here so it applies before the first paint, no round trip
     let custom_css = modules::custom_css::for_page();
     if let Some(global) = &global
         && !custom_css.is_empty()
@@ -91,7 +89,6 @@ fn inject_scripts(frame: &Frame, context: &V8Context) {
     }
     if let (Some(global), Some(registry)) = (global, registry) {
         global.delete_value_bykey(Some(&CefString::from(REGISTRY_KEY)));
-        // from disk: the renderer's config is a copy from its own start
         let scripts = if utils::config_on_disk("userscripts", true) {
             modules::userscripts::load_group("game")
         } else {
@@ -114,7 +111,6 @@ fn run_userscripts(frame: &Frame, context: &V8Context, registry: V8Value, script
     }
 }
 
-// scripts-load from the manager, queued behind the file writes it depends on
 fn load_userscripts(frame: &Frame, request: &str) {
     let Some(loader) = SCRIPT_LOADERS.with_borrow(|map| map.get(&frame_key(frame)).cloned()) else {
         return;
@@ -143,14 +139,12 @@ fn load_userscripts(frame: &Frame, request: &str) {
     context.exit();
 }
 
-// compiled here because krunker traps eval and Function, the bundle must never compile anything
 fn compile_scripts(context: &V8Context, scripts: &[modules::userscripts::Script]) -> Option<V8Value> {
     let described = serde_json::Value::Array(scripts.iter().map(|script| script.describe()).collect());
     let list = json_parse(context, &described.to_string())?;
 
     for (index, script) in scripts.iter().enumerate() {
         let Some(item) = list.value_byindex(index as i32) else { continue };
-        // wrapper on the first line keeps line numbers intact
         let wrapped = format!("(function (module, exports) {{{}\n}})", script.source);
         let (key, mut value) = match eval_value(context, &wrapped, &format!("scripts/{}", script.key)) {
             Ok(function) if function.is_function() != 0 => ("run", Some(function)),
@@ -183,7 +177,6 @@ wrap_v8_handler! {
 
             match name.as_str() {
                 "postMessage" => {
-                    // strings only, like WebView2
                     let Some(Some(value)) = args.first() else { return 1 };
                     if value.is_string() == 0 {
                         return 1;
@@ -298,7 +291,6 @@ wrap_render_process_handler! {
             if context.enter() == 0 {
                 return;
             }
-            // cloudflare turnstile (krunker login since season 10) fails with chrome.webview in its iframe
             if frame.is_main() != 0 {
                 install_bridge(context);
             }

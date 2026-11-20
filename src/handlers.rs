@@ -100,6 +100,7 @@ wrap_resource_request_handler! {
             if modules::blocklist::is_blocked(&url)
                 && modules::icons::bytes_for(&url).is_none()
                 && !modules::blocklist::wants_empty_model(&url)
+                && !modules::blocklist::wants_silence(&url)
                 && !modules::swapper::has_swap(&url)
             {
                 debug_print!("handlers: blocked {url}");
@@ -131,6 +132,10 @@ wrap_resource_request_handler! {
             if modules::blocklist::wants_empty_model(&url) {
                 debug_print!("handlers: empty model for {url}");
                 return modules::resource::serve("text/plain", modules::blocklist::EMPTY_MODEL.as_bytes().to_vec());
+            }
+            if modules::blocklist::wants_silence(&url) {
+                debug_print!("handlers: silence for {url}");
+                return modules::resource::serve("audio/wav", modules::blocklist::SILENT_WAV.clone());
             }
             let bytes = modules::icons::bytes_for(&url)?;
             debug_print!("handlers: kute icon for {url}");
@@ -255,6 +260,7 @@ wrap_keyboard_handler! {
             if event.type_ != KeyEventType::RAWKEYDOWN {
                 return 0;
             }
+            ALT_F4.set(event.windows_key_code == 0x73 && event.modifiers & crate::modules::hotkeys::ALT != 0);
             // after the key: a resize closes a focused popup (color picker), chromium then sends the key into the freed widget
             if let Some(action) = crate::modules::hotkeys::action_for(event.windows_key_code, event.modifiers) {
                 let mut task = HotkeyTask::new(browser.identifier(), action);
@@ -268,6 +274,11 @@ wrap_keyboard_handler! {
 // chrome/app/chrome_command_ids.h
 const IDC_CLOSE_WINDOW: ::std::os::raw::c_int = 34012;
 
+thread_local! {
+    // ctrl+shift+w is IDC_CLOSE_WINDOW too and closed kute mid match
+    static ALT_F4: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 wrap_command_handler! {
     struct KuteCommandHandler;
 
@@ -280,6 +291,7 @@ wrap_command_handler! {
         ) -> ::std::os::raw::c_int {
             // alt+f4 is a chrome accelerator in a chrome style browser, it never reaches our window as WM_SYSCOMMAND
             if command_id == IDC_CLOSE_WINDOW
+                && ALT_F4.get()
                 && let Some(browser) = browser
             {
                 window::close_window(browser);
@@ -973,9 +985,6 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
             if *setting == "disableOnlineFeatures" {
                 modules::blocklist::set_online_off(*value == "true");
             }
-            if (*setting == "market" || *setting == "disableOnlineFeatures") && browser.is_popup() == 0 {
-                modules::history::load(browser);
-            }
             if *setting == "disableCats" {
                 modules::blocklist::set_cats_off(*value == "true");
             }
@@ -1198,10 +1207,6 @@ pub fn handle_web_message(browser: &Browser, frame: &Frame, message_string: &str
         }
         ["ping-regions"] => {
             modules::ping::ping_regions(browser.identifier());
-        }
-        // the challenge is base64url from the server, so it never contains the message separator
-        ["market-attest", challenge, logged_in] if is_krunker_frame(frame) && challenge.len() <= 128 => {
-            bridge::post_json(browser, &modules::attest::attest(challenge, logged_in.parse::<bool>().unwrap_or(false)));
         }
         _ => {}
     }

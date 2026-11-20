@@ -36,9 +36,6 @@ pub fn host_features() -> serde_json::Value {
     serde_json::json!([
         "matchmaker",
         "dev-proof",
-        "market-attest",
-        "history-capture",
-        "market-capture",
         "krunker-links",
         "kute-icons",
         "script-manager",
@@ -64,19 +61,17 @@ pub fn host_features() -> serde_json::Value {
         "diagnostics",
         "recovery",
         "left-click-f20",
-        "scroll-binds"
+        "scroll-binds",
+        "bundle-updates-toggle",
+        "js-flags"
     ])
 }
 
-// what the linux host really does, the rest are stubs there (src/linux)
 #[cfg(target_os = "linux")]
 pub fn host_features() -> serde_json::Value {
     serde_json::json!([
         "matchmaker",
         "dev-proof",
-        "market-attest",
-        "history-capture",
-        "market-capture",
         "krunker-links",
         "kute-icons",
         "script-manager",
@@ -103,7 +98,9 @@ pub fn host_features() -> serde_json::Value {
         "accounts-order",
         "diagnostics",
         "recovery",
-        "left-click-f20"
+        "left-click-f20",
+        "bundle-updates-toggle",
+        "js-flags"
     ])
 }
 
@@ -111,7 +108,6 @@ pub fn send_info(frame: &Frame) {
     let version = env!("CARGO_PKG_VERSION");
     let mut info_map = serde_json::Map::new();
     let mut settings = serde_json::json!(&*crate::CONFIG.lock().unwrap());
-    // safe mode and crash tests: the page shows and follows this session's values, the stored ones stay
     if let Some(data) = settings["data"].as_object_mut() {
         for (key, value) in &crate::modules::recovery::overrides().settings {
             data.insert(key.clone(), value.clone());
@@ -124,11 +120,9 @@ pub fn send_info(frame: &Frame) {
     }
     info_map.insert("version".to_string(), serde_json::Value::String(version.to_string()));
     info_map.insert("apiBase".to_string(), serde_json::Value::String(crate::utils::api_url()));
-    // an exe without this field is a windows one
     info_map.insert("platform".to_string(), serde_json::Value::String(std::env::consts::OS.to_string()));
     info_map.insert("hostFeatures".to_string(), host_features());
 
-    // restart-only settings as this process runs them, the page compares them with the stored ones
     let mut running: serde_json::Map<String, serde_json::Value> = crate::app::PATCHES
         .iter()
         .map(|patch| (patch.setting.to_string(), crate::app::feature_enabled(patch.feature).into()))
@@ -136,7 +130,6 @@ pub fn send_info(frame: &Frame) {
     running.insert("hardFlip".to_string(), (*crate::app::HOOK_AT_START.get().unwrap_or(&true)).into());
     info_map.insert("running".to_string(), running.into());
 
-    // who holds the fps limit: chromium's display scheduler (patch 08) or the present hook with the bundle's busy wait fallback
     let limiter = if crate::app::feature_enabled("KuteFrameLimiter") { "viz" } else { "hook" };
     info_map.insert("frameLimiter".to_string(), serde_json::Value::String(limiter.to_string()));
 
@@ -169,7 +162,6 @@ wrap_task! {
     }
 }
 
-// usable from any thread
 pub fn post_json_later(browser_id: i32, json: String) {
     let mut task = PostJsonTask::new(browser_id, json);
     post_task(ThreadId::UI, Some(&mut task));
@@ -208,14 +200,12 @@ wrap_task! {
     }
 }
 
-// usable from any thread
 #[cfg(windows)]
 pub fn post_json_to_main_later(json: String) {
     let mut task = PostMainJsonTask::new(json);
     post_task(ThreadId::UI, Some(&mut task));
 }
 
-// usable from any thread
 pub fn load_scripts_later(browser_id: i32, request: String) {
     let mut task = LoadScriptsTask::new(browser_id, request);
     post_task(ThreadId::UI, Some(&mut task));

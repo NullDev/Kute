@@ -93,6 +93,10 @@
 	cursor: pointer;
 }
 
+.mmRow:has(input:disabled) {
+	opacity: 0.45;
+}
+
 [hidden] {
 	display: none !important;
 }
@@ -187,7 +191,7 @@
 	<div id="mmHint">F6 joins the best lobby for these. Nothing picked in a group means all of it</div>
 	<h3>Regions</h3>
 	<div class="mmGrid" id="mmRegions"></div>
-	<h3>Modes <span class="mmSub">★ on a mode to prefer it</span></h3>
+	<h3>Modes <span class="mmSub">none = all but Parkour (any mode when maps are picked) · ★ to prefer</span></h3>
 	<div class="mmGrid" id="mmModes"></div>
 	<div class="mmPreferredBox" id="mmModeRanks">
 		<div class="mmPreferredTitle">Preferred first, then any other mode. Modes rank above maps</div>
@@ -205,10 +209,14 @@
 	<label class="mmRow">Min players <input type="number" id="mmMinPlayers" min="0" max="7"></label>
 	<label class="mmRow">Max players <input type="number" id="mmMaxPlayers" min="0" max="7"></label>
 	<label class="mmRow">Min time left (seconds) <input type="number" id="mmMinTime" min="0" max="480" step="10"></label>
+	<label class="mmRow">Skip the lobbies you were in last (1 = only the current one, 0 = off) <input type="number" id="mmSkipRecent" min="0" max="10"></label>
 	<label class="mmRow">Most players first (otherwise lowest ping first) <input type="checkbox" id="mmSortByPlayers"></label>
+	<label class="mmRow">Keep searching until a lobby matches (checks every 10 seconds) <input type="checkbox" id="mmKeepSearching"></label>
 	<label class="mmRow">Open the server browser when nothing matches <input type="checkbox" id="mmServerBrowser"></label>
 	<label class="mmRow">Show the search <input type="checkbox" id="mmAnimation"></label>
 	<label class="mmRow">Search again when a match ends (public lobbies only) <input type="checkbox" id="mmSearchAfterMatch"></label>
+	<label class="mmRow">Collect crafting items and collectibles when a match ends <input type="checkbox" id="mmCollectRewards"></label>
+	<label class="mmRow">Collect double XP when a match ends <input type="checkbox" id="mmCollectDoubleXp"></label>
 	<div id="mmActions">
 		<div class="mmButton" id="mmReset">Reset</div>
 		<div class="mmButton" id="mmDone">Done</div>

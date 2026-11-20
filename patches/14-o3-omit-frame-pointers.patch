@@ -1,0 +1,22 @@
+diff --git a/build/config/compiler/BUILD.gn b/build/config/compiler/BUILD.gn
+index 7df3e18c4c..6fcf95a997 100644
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -2440,7 +2440,7 @@ config("no_incompatible_pointer_warnings") {
+ # IMPORTANT: On Windows "/O1" and "/O2" must go before the common flags.
+ if (is_win) {
+   common_optimize_on_cflags = [
+-    "/Oy-",  # Disable omitting frame pointers, must be after /O2.
++    "/Oy",  # kute experiment E: omit frame pointers, x64 unwinds through .pdata
+     "/Zc:inline",  # Remove unreferenced COMDAT (faster links).
+   ]
+   if (!is_asan) {
+@@ -2577,7 +2577,7 @@ config("optimize") {
+     # consistency with the other platforms.
+     cflags = [
+                "/O2",
+-               "/clang:-O2",
++               "/clang:-O3",  # kute experiment E: -O3 for every target like optimize_max
+              ] + common_optimize_on_cflags
+ 
+     # The `-O3` for clang turns on extra optimizations compared to the standard

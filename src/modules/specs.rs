@@ -8,7 +8,7 @@ use windows::{
     core::*,
 };
 
-use crate::modules::{gpu, power};
+use crate::modules::{gpu, overlays, power};
 
 // luids as hex strings, a u64 does not survive JSON numbers
 fn luid_text(luid: u64) -> String {
@@ -154,6 +154,7 @@ pub fn collect(hwnd: HWND) -> Value {
         "hybrid": topology.hybrid(),
         "hybridSource": topology.source(),
         "powerOverlay": power::overlay_name(),
+        "overlays": overlays::windows_over(hwnd),
         "cpu": {
             "name": cpu_name(),
             "threads": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0),

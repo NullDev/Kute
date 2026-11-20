@@ -20,7 +20,6 @@ mod window;
 use linux::window;
 pub mod modules {
     pub mod accounts;
-    pub mod attest;
     pub mod bench;
     pub mod bisect;
     pub mod blocklist;
@@ -39,7 +38,6 @@ pub mod modules {
     pub mod gpu;
     #[cfg(target_os = "linux")]
     pub use crate::linux::gpu;
-    pub mod history;
     pub mod hotkeys;
     pub mod icons;
     #[cfg(windows)]
@@ -59,6 +57,8 @@ pub mod modules {
     pub mod obs;
     #[cfg(target_os = "linux")]
     pub use crate::linux::obs;
+    #[cfg(windows)]
+    pub mod overlays;
     pub mod ping;
     #[cfg(windows)]
     pub mod power;

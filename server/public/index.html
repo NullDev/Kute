@@ -52,6 +52,8 @@
     <div class="noise" aria-hidden="true"></div>
     <div class="page-grid" aria-hidden="true"></div>
 
+    <p class="ai-note">I am not a web designer. This website was designed with AI. If you prefer the AI-less version, <a href="./plain.html">click here</a>.</p>
+
     <header class="topbar">
       <a class="brand" href="#top" aria-label="Kute, back to top">
         <img src="./assets/favicon.png" alt="" width="32" height="32" />
@@ -329,8 +331,11 @@
             <h3>Performance</h3>
             <div><span></span><b>Bundled Chromium</b><p>Kute ships its own Chromium (CEF). Nothing else to install.</p></div>
             <div><span></span><b>Patched Chromium</b><p>No aim freeze with uncapped FPS, no stutter when the GPU is the limit, and more. Every patch is a switch in the Engine settings.</p></div>
+            <div><span></span><b>Compiled for Krunker</b><p>Chrome is optimized with a profile of loading web pages. Kute's Chromium is compiled with one recorded in Krunker matches: about 20&nbsp;% more FPS in a match.</p></div>
             <div><span></span><b>Uncapped FPS</b><p>Removes the refresh rate cap.</p></div>
             <div><span></span><b>Fix Audio Stutters</b><p>Optional: keeps the game's 3D sound from eating the audio thread at high FPS.</p></div>
+            <div><span></span><b>Cache Game Scripts</b><p>Krunker tells the browser to never cache its scripts, so every lobby change downloads and parses them again. Kute keeps them, a lobby change blocks about 16&nbsp;ms instead of 800&nbsp;ms.</p></div>
+            <div><span></span><b>Wide Inline Caches</b><p>Krunker's obfuscated code reads every property in a way V8 gives up on early. Kute lets V8 track 16 object shapes per access instead of 4: about 10&nbsp;% more FPS in a match.</p></div>
             <div><span></span><b>Laptop setup</b><p>Two graphics chips are recognized: Kute picks the fast one and skips the swap chain hook there. Plugged in, it runs on Best performance and puts your power mode back after. On Linux, NVIDIA PRIME offload renders on the NVIDIA chip.</p></div>
             <div><span></span><b>NVIDIA profile</b><p>A driver profile for Kute alone lifts a global Max Frame Rate or forced V-Sync. Yours to change.</p></div>
             <div><span></span><b>Exact FPS limit</b><p>Held inside Chromium's compositor by our own patch, so the CPU idles between frames. Works with or without the swap chain hook.</p></div>
@@ -358,7 +363,7 @@
 
           <div class="feature-group" id="f-lobbies">
             <h3>Lobbies and ranked</h3>
-            <div><span></span><b>Matchmaker</b><p>F6 joins the lowest ping lobby that fits your filters: region, mode, map, players, time left. Star modes and maps to try them first, in your order. Prefers lobbies that will not fill up while you load in, and can search again when a match ends.</p></div>
+            <div><span></span><b>Matchmaker</b><p>F6 joins the lowest ping lobby that fits your filters: region, mode, map, players, time left. Star modes and maps to try them first, in your order. Prefers lobbies that will not fill up while you load in, and can search again when a match ends. Can keep searching until a lobby opens up, moves on when the lobby it picked is full, skips the lobbies you were in last and collects double XP and rewards after a match.</p></div>
             <div><span></span><b>Ranked queue</b><p>Queue for ranked from a small window without the game open. Turn its match found sound down, or use your own sound file.</p></div>
             <div><span></span><b>Rank progress</b><p>Elo progress to the next rank and the rank distribution.</p></div>
             <div><span></span><b>Hotkeys</b><p>F4 new lobby, F6 matchmaker, F5 reload, F11 fullscreen, F12 devtools. Rebind or clear any of them, add keys to toggle Spotify and Keystrokes or log in a saved account.</p></div>
@@ -367,6 +372,7 @@
           <div class="feature-group" id="f-interface">
             <h3>Interface</h3>
             <div><span></span><b>Better chat</b><p>Team and all chat in one view, Tab switches where you send. Chat text can be selected.</p></div>
+            <div><span></span><b>Blocked message warning</b><p>Krunker silently drops chat messages with certain words. Kute puts a red note where your message would be, so you know nobody received it.</p></div>
             <div><span></span><b>Chat logs</b><p>The last 2000 chat lines, kept when you switch lobbies. F1 opens them to filter by players, kills, events and server, search and copy. The key is yours to change.</p></div>
             <div><span></span><b>Menu timer</b><p>The match timer in the menu.</p></div>
             <div><span></span><b>Classic menu</b><p>The Season 9 menu layout, new buttons included.</p></div>
@@ -397,14 +403,13 @@
           <div class="feature-group" id="f-client">
             <h3>Client</h3>
             <div><span></span><b>Account manager</b><p>Saved accounts, encrypted by Windows. Passwords never reach the page. Drag them into your order, Ctrl+Alt+1, 2 and 3 log in the first three.</p></div>
-            <div><span></span><b>Kute Market</b><p>A clear market overview, tabbed discovery by budget and activity, watchlists with price targets, inventory insights, and side-by-side trade comparisons, in a window you can resize and zoom.</p></div>
             <div><span></span><b>End message per account</b><p>Krunker's match end message is kept per account, so your alt never sends your main's message.</p></div>
             <div><span></span><b>Settings transfer</b><p>Export Kute's settings, HUD positions, matchmaker filters and hotkeys to one file, import it on another PC.</p></div>
             <div><span></span><b>Diagnostics report</b><p>Hardware, drivers, settings, recent errors and crash logs in one file for a bug report. You see all of it first, nothing is uploaded.</p></div>
             <div><span></span><b>Safe mode &amp; crash finder</b><p>Crashed twice in a row? Start without your scripts, swaps and tweaks, or let Kute find which one causes it. Hold Shift at start for safe mode.</p></div>
             <div><span></span><b>OBS capture</b><p>An OBS source that takes the frames straight from the game, plus a separate audio window.</p></div>
             <div><span></span><b>Medal.tv</b><p>Officially supported by Medal.tv, so clipping your plays just works.</p></div>
-            <div><span></span><b>Auto-updater</b><p>Updates the client, and script fixes arrive without a reinstall. Shows a changelog.</p></div>
+            <div><span></span><b>Auto-updater</b><p>Updates the client, and script fixes arrive without a reinstall (you can turn that off). Shows a changelog.</p></div>
           </div>
         </div>
       </section>
