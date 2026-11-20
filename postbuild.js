@@ -4,7 +4,8 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const buildType = args[0];
 
-// cef-dll-sys drops the CEF runtime next to the exe, but only when its build script runs
+const DISTRIBUTION_SEARCH_DEPTH = 6;
+
 const targetDir = path.join(process.cwd(), "target", buildType);
 const targetResourcesDir = path.join(targetDir, "resources");
 const distDir = path.join(targetDir, "dist");
@@ -45,7 +46,6 @@ const linuxRuntimeFiles = [
 
 const cefRuntimeFiles = linux ? linuxRuntimeFiles : windowsRuntimeFiles;
 const vcRuntimeFiles = linux ? [] : ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"];
-// the windows dll crates, not built on linux
 const hostFiles = linux ? [] : ["render.dll"];
 
 /**
@@ -87,15 +87,30 @@ function findCefDistribution(){
     const buildDir = path.join(targetDir, "build");
     if (!cefVersion || !fs.existsSync(buildDir)) return null;
 
+    const platformDir = linux ? "cef_linux_x86_64" : "cef_windows_x86_64";
+    /** @type {{ dir: string, time: number }[]} */
     const matches = [];
-    for (const entry of fs.readdirSync(buildDir)){
-        if (!entry.startsWith("cef-dll-sys-")) continue;
-        const dir = path.join(buildDir, entry, "out", linux ? "cef_linux_x86_64" : "cef_windows_x86_64");
-        const archive = path.join(dir, "archive.json");
-        if (!fs.existsSync(archive)) continue;
-        if (!String(JSON.parse(fs.readFileSync(archive, "utf8")).name).startsWith(`cef_binary_${cefVersion}+`)) continue;
-        matches.push({ dir, time: fs.statSync(archive).mtimeMs });
-    }
+
+    /**
+     * @param {string} dir
+     * @param {number} depth
+     */
+    const search = (dir, depth) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })){
+            if (!entry.isDirectory()) continue;
+            const entryPath = path.join(dir, entry.name);
+            if (entry.name !== platformDir){
+                if (depth < DISTRIBUTION_SEARCH_DEPTH) search(entryPath, depth + 1);
+                continue;
+            }
+            const archive = path.join(entryPath, "archive.json");
+            if (!fs.existsSync(archive)) continue;
+            if (!String(JSON.parse(fs.readFileSync(archive, "utf8")).name).startsWith(`cef_binary_${cefVersion}+`)) continue;
+            matches.push({ dir: entryPath, time: fs.statSync(archive).mtimeMs });
+        }
+    };
+    search(buildDir, 1);
+
     return matches.sort((a, b) => b.time - a.time)[0]?.dir ?? null;
 }
 
@@ -125,12 +140,10 @@ try {
         console.warn("OBS plugin was not built; skipping bundled plugin copy.");
     }
 
-    // our patched libcef (aim freeze fixes) over the stock one. same CEF version, so headers and wrapper still match
     const patchedCefDir = path.join(process.cwd(), "resources", linux ? "cef-linux" : "cef");
     if (fs.existsSync(patchedCefDir)){
         for (const file of fs.readdirSync(patchedCefDir)){
             const source = path.join(patchedCefDir, file);
-            // no git lfs = tiny pointer file, never ship that
             if (fs.statSync(source).size < 1024){
                 console.warn(`${file} in resources/cef is a git lfs pointer, run "git lfs pull". Keeping the stock file.`);
                 continue;
@@ -139,10 +152,8 @@ try {
         }
     }
 
-    // installer payload, everything but the exe (the wxs points at that directly)
     fs.rmSync(distDir, { recursive: true, force: true });
     fs.mkdirSync(distDir, { recursive: true });
-    // missing file = installer that can't start, so fail instead of warn
     const missing = [...cefRuntimeFiles, ...vcRuntimeFiles, ...hostFiles].filter(
         (file) => !copyIfExists(path.join(targetDir, file), path.join(distDir, file)),
     );
